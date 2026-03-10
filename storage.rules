@@ -1,0 +1,22 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /users/{userId}/documents/{fileName} {
+      allow read: if false;
+      allow write: if request.auth != null &&
+        request.auth.uid == userId &&
+        fileName.matches('.*\\.enc$');
+    }
+
+    match /temp_scans/{userId}/{fileName} {
+      allow write: if request.auth != null &&
+        request.auth.uid == userId &&
+        fileName.matches('.*\\.jpg');
+      allow read: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

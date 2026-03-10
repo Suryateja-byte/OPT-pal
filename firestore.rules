@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'uid',
+          'email',
+          'optType',
+          'optStartDate',
+          'optEndDate',
+          'sevisId',
+          'schoolName',
+          'cipCode',
+          'onboardingSource',
+          'onboardingDocumentIds',
+          'onboardingConfirmedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    match /users/{userId}/documents/{documentId} {
+      allow read: if isOwner(userId);
+      allow create: if false;
+      allow update: if isOwner(userId) &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(['userTag']);
+      allow delete: if isOwner(userId);
+    }
+
+    match /scan_results/{userId}/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+  }
+}

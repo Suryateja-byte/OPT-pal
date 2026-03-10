@@ -1,0 +1,16 @@
+*.iml
+.gradle
+.kotlin
+.claude/
+.zencoder/
+/local.properties
+.idea/
+.DS_Store
+/build
+**/build/
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+build_log.txt
+test_log*.txt

@@ -1,0 +1,30 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Scale and center the 100x100 SVG content to fit safely within the adaptive icon -->
+    <group
+        android:scaleX="0.7"
+        android:scaleY="0.7"
+        android:translateX="19"
+        android:translateY="19">
+        <!-- White Background Rounded Rectangle (from SVG) -->
+        <path
+            android:fillColor="#ffffff"
+            android:pathData="M 22,0 L 78,0 Q 100,0 100,22 L 100,78 Q 100,100 78,100 L 22,100 Q 0,100 0,78 L 0,22 Q 0,0 22,0 Z" />
+        
+        <!-- Main Dark Ring -->
+        <path
+            android:strokeColor="#282b33"
+            android:strokeWidth="7"
+            android:pathData="M 50, 15 A 35, 35 0 1, 1 50, 85 A 35, 35 0 1, 1 50, 15" />
+        
+        <!-- Blue Dot with White Border -->
+        <path
+            android:fillColor="#4e54eb"
+            android:strokeColor="#ffffff"
+            android:strokeWidth="5"
+            android:pathData="M 74.75, 13.25 A 12, 12 0 1, 1 74.75, 37.25 A 12, 12 0 1, 1 74.75, 13.25" />
+    </group>
+</vector>

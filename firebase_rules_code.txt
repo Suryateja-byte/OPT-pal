@@ -1,0 +1,97 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function matchesUserId(userId) {
+      return !('uid' in request.resource.data) || request.resource.data.uid == userId;
+    }
+
+    function validOptTypeField() {
+      return !('optType' in request.resource.data)
+          || request.resource.data.optType == null
+          || (request.resource.data.optType is string
+          && request.resource.data.optType.matches('(?i)(initial|stem)'));
+    }
+
+    function validOptStartDateField() {
+      return !('optStartDate' in request.resource.data)
+          || request.resource.data.optStartDate == null
+          || request.resource.data.optStartDate is timestamp;
+    }
+
+    function validEmploymentDocument() {
+      return request.resource.data.keys().hasAll(['employerName', 'jobTitle', 'startDate']) &&
+          request.resource.data.employerName is string &&
+          request.resource.data.jobTitle is string &&
+          request.resource.data.startDate is int &&
+          validEmploymentEndDate();
+    }
+
+    function validEmploymentEndDate() {
+      return !('endDate' in request.resource.data) ||
+          request.resource.data.endDate == null ||
+          (request.resource.data.endDate is int &&
+           request.resource.data.endDate >= request.resource.data.startDate);
+    }
+
+    function validReportingDocument() {
+      return request.resource.data.keys().hasAll(['eventType', 'description', 'eventDate', 'dueDate', 'isCompleted']) &&
+          request.resource.data.eventType is string &&
+          request.resource.data.description is string &&
+          request.resource.data.eventDate is int &&
+          request.resource.data.dueDate is int &&
+          request.resource.data.dueDate >= request.resource.data.eventDate &&
+          request.resource.data.isCompleted is bool &&
+          validReportingSourceField();
+    }
+
+    function validReportingSourceField() {
+      return !('createdBy' in request.resource.data) ||
+          (request.resource.data.createdBy is string &&
+           request.resource.data.createdBy.matches('(?i)(auto|manual)'));
+    }
+
+    function validDocumentMetadata(userId) {
+      return request.resource.data.keys().hasAll(['fileName', 'userTag', 'storagePath', 'downloadUrl', 'uploadedAt']) &&
+          request.resource.data.fileName is string &&
+          request.resource.data.userTag is string &&
+          request.resource.data.downloadUrl is string &&
+          (request.resource.data.uploadedAt is timestamp || request.resource.data.uploadedAt is int) &&
+          request.resource.data.storagePath is string &&
+          request.resource.data.storagePath.matches('^users/' + userId + '/documents/.+');
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow delete: if isOwner(userId);
+      allow create, update: if isOwner(userId) && matchesUserId(userId) && validOptTypeField() && validOptStartDateField();
+
+      match /employment/{jobId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && validEmploymentDocument();
+      }
+
+      match /reporting/{taskId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && validReportingDocument();
+      }
+
+      match /documents/{docId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && validDocumentMetadata(userId);
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

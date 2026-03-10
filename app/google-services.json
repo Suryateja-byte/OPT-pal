@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "284343476494",
+    "project_id": "opt-pal",
+    "storage_bucket": "opt-pal.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:284343476494:android:2efe74983e62a13169f75f",
+        "android_client_info": {
+          "package_name": "com.sidekick.opt_pal"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBOrTW2yt6tczlcIWGg88b7dUaGBE4rE2Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

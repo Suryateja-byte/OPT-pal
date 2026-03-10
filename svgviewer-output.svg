@@ -1,0 +1,12 @@
+<svg width="512" height="512" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- White Background Rounded Rectangle -->
+  <rect x="0" y="0" width="100" height="100" rx="22" fill="#ffffff" />
+
+  <!-- Main Dark Ring -->
+  <circle cx="50" cy="50" r="35" stroke="#282b33" stroke-width="7" />
+  
+  <!-- Blue Dot with White Border (Calculated at 45 degree angle) -->
+  <!-- cx = 50 + 35 * cos(45deg) ≈ 74.75 -->
+  <!-- cy = 50 - 35 * sin(45deg) ≈ 25.25 -->
+  <circle cx="74.75" cy="25.25" r="12" fill="#4e54eb" stroke="#ffffff" stroke-width="5" />
+</svg>
