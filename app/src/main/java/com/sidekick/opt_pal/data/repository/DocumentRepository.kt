@@ -2,6 +2,7 @@ package com.sidekick.opt_pal.data.repository
 
 import android.content.ContentResolver
 import android.net.Uri
+import com.sidekick.opt_pal.data.model.DocumentCategory
 import com.sidekick.opt_pal.data.model.DocumentMetadata
 import com.sidekick.opt_pal.data.model.DocumentUploadConsent
 import com.sidekick.opt_pal.data.model.SecureDocumentContent
@@ -15,6 +16,8 @@ interface DocumentRepository {
         fileName: String,
         userTag: String,
         consent: DocumentUploadConsent,
+        documentCategory: DocumentCategory = DocumentCategory.GENERAL,
+        chatEligible: Boolean? = null,
         contentResolver: ContentResolver,
         onProgress: (bytesSent: Long, totalBytes: Long) -> Unit = { _, _ -> }
     ): Result<Unit>

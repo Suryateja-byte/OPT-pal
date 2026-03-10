@@ -37,13 +37,17 @@ import com.sidekick.opt_pal.core.session.SessionViewModel
 import com.sidekick.opt_pal.di.AppModule
 import com.sidekick.opt_pal.feature.auth.LoginRoute
 import com.sidekick.opt_pal.feature.auth.RegisterRoute
+import com.sidekick.opt_pal.feature.casestatus.UscisCaseStatusRoute
 import com.sidekick.opt_pal.feature.dashboard.DashboardRoute
 import com.sidekick.opt_pal.feature.employment.AddEmploymentRoute
 import com.sidekick.opt_pal.feature.feedback.FeedbackRoute
 import com.sidekick.opt_pal.feature.legal.LegalRoute
 import com.sidekick.opt_pal.feature.reporting.ManageReportingRoute
 import com.sidekick.opt_pal.feature.reporting.ReportingRoute
+import com.sidekick.opt_pal.feature.reporting.ReportingWizardRoute
 import com.sidekick.opt_pal.feature.setup.SetupRoute
+import com.sidekick.opt_pal.feature.tax.FicaTaxRefundRoute
+import com.sidekick.opt_pal.feature.travel.TravelAdvisorRoute
 import com.sidekick.opt_pal.feature.vault.DocumentVaultRoute
 import com.sidekick.opt_pal.feature.vault.SecureDocumentViewerRoute
 import com.sidekick.opt_pal.navigation.AppScreen
@@ -53,6 +57,8 @@ import kotlinx.coroutines.launch
 fun OPTPalApp(
     sessionViewModel: SessionViewModel,
     securitySessionManager: SecuritySessionManager,
+    pendingUscisCaseId: String? = null,
+    onPendingUscisCaseHandled: () -> Unit = {},
     navController: NavHostController = rememberNavController()
 ) {
     val sessionState by sessionViewModel.uiState.collectAsStateWithLifecycle()
@@ -61,6 +67,13 @@ fun OPTPalApp(
 
     LaunchedEffect(sessionState.isLoggedIn) {
         securitySessionManager.onAuthStateChanged(sessionState.isLoggedIn)
+    }
+
+    LaunchedEffect(sessionState.isLoggedIn, sessionState.userProfile) {
+        AppModule.unemploymentAlertCoordinator.syncWithSession(
+            isLoggedIn = sessionState.isLoggedIn,
+            userProfile = sessionState.userProfile
+        )
     }
 
     LaunchedEffect(sessionState.isLoggedIn, sessionState.isProfileComplete, sessionState.isCheckingAuth) {
@@ -77,6 +90,24 @@ fun OPTPalApp(
                     launchSingleTop = true
                 }
             }
+        }
+    }
+
+    LaunchedEffect(
+        sessionState.isLoggedIn,
+        sessionState.isProfileComplete,
+        sessionState.isCheckingAuth,
+        pendingUscisCaseId
+    ) {
+        if (!sessionState.isCheckingAuth &&
+            sessionState.isLoggedIn &&
+            sessionState.isProfileComplete &&
+            !pendingUscisCaseId.isNullOrBlank()
+        ) {
+            navController.navigate(AppScreen.CaseStatus.createRoute(pendingUscisCaseId)) {
+                launchSingleTop = true
+            }
+            onPendingUscisCaseHandled()
         }
     }
 
@@ -113,6 +144,9 @@ fun OPTPalApp(
                     DashboardRoute(
                         onAddEmployment = { navController.navigate(AppScreen.AddEmployment.route) },
                         onEditEmployment = { navController.navigate(AppScreen.EditEmployment.createRoute(it)) },
+                        onOpenTaxRefund = { navController.navigate(AppScreen.TaxRefund.route) },
+                        onOpenTravelAdvisor = { navController.navigate(AppScreen.TravelAdvisor.route) },
+                        onOpenCaseStatus = { navController.navigate(AppScreen.CaseStatus.createRoute()) },
                         onOpenReporting = { navController.navigate(AppScreen.Reporting.route) },
                         onOpenVault = { navController.navigate(AppScreen.DocumentVault.route) },
                         onSendFeedback = { navController.navigate(AppScreen.Feedback.route) },
@@ -121,8 +155,42 @@ fun OPTPalApp(
                         onOpenChat = { navController.navigate(AppScreen.Chat.route) }
                     )
                 }
+                composable(
+                    AppScreen.CaseStatus.route,
+                    arguments = listOf(
+                        navArgument(AppScreen.CaseStatus.CASE_ID_ARG) {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) { backStackEntry ->
+                    UscisCaseStatusRoute(
+                        selectedCaseId = backStackEntry.arguments?.getString(AppScreen.CaseStatus.CASE_ID_ARG),
+                        onNavigateBack = { navController.popBackStack() }
+                    )
+                }
+                composable(AppScreen.TaxRefund.route) {
+                    FicaTaxRefundRoute(
+                        onNavigateBack = { navController.popBackStack() },
+                        onOpenDocument = { documentId ->
+                            navController.navigate(AppScreen.DocumentViewer.createRoute(documentId))
+                        }
+                    )
+                }
+                composable(AppScreen.TravelAdvisor.route) {
+                    TravelAdvisorRoute(
+                        onNavigateBack = { navController.popBackStack() },
+                        onUploadMissingDocument = { navController.navigate(AppScreen.DocumentSelection.route) }
+                    )
+                }
                 composable(AppScreen.AddEmployment.route) {
-                    AddEmploymentRoute(onNavigateBack = { navController.popBackStack() })
+                    AddEmploymentRoute(
+                        onNavigateBack = { navController.popBackStack() },
+                        onOpenReportingWizard = { wizardId ->
+                            navController.navigate(AppScreen.ReportingWizard.createRoute(wizardId = wizardId))
+                        }
+                    )
                 }
                 composable(
                     AppScreen.EditEmployment.route,
@@ -136,7 +204,10 @@ fun OPTPalApp(
                     } else {
                         AddEmploymentRoute(
                             employmentId = employmentId,
-                            onNavigateBack = { navController.popBackStack() }
+                            onNavigateBack = { navController.popBackStack() },
+                            onOpenReportingWizard = { wizardId ->
+                                navController.navigate(AppScreen.ReportingWizard.createRoute(wizardId = wizardId))
+                            }
                         )
                     }
                 }
@@ -146,7 +217,39 @@ fun OPTPalApp(
                         onAddManualTask = { navController.navigate(AppScreen.ManageReporting.createRoute()) },
                         onEditManualTask = { obligationId ->
                             navController.navigate(AppScreen.ManageReporting.createRoute(obligationId))
+                        },
+                        onStartWizard = {
+                            navController.navigate(AppScreen.ReportingWizard.createRoute())
+                        },
+                        onContinueWizard = { wizardId, obligationId ->
+                            navController.navigate(
+                                AppScreen.ReportingWizard.createRoute(
+                                    wizardId = wizardId,
+                                    obligationId = obligationId
+                                )
+                            )
                         }
+                    )
+                }
+                composable(
+                    AppScreen.ReportingWizard.route,
+                    arguments = listOf(
+                        navArgument(AppScreen.ReportingWizard.WIZARD_ID_ARG) {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        },
+                        navArgument(AppScreen.ReportingWizard.OBLIGATION_ID_ARG) {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) { backStackEntry ->
+                    ReportingWizardRoute(
+                        wizardId = backStackEntry.arguments?.getString(AppScreen.ReportingWizard.WIZARD_ID_ARG),
+                        obligationId = backStackEntry.arguments?.getString(AppScreen.ReportingWizard.OBLIGATION_ID_ARG),
+                        onNavigateBack = { navController.popBackStack() }
                     )
                 }
                 composable(AppScreen.DocumentVault.route) {
@@ -248,6 +351,7 @@ fun OPTPalApp(
                     errorMessage = securityState.unlockError,
                     onSignOut = {
                         coroutineScope.launch {
+                            AppModule.caseStatusRepository.syncMessagingEndpoint(enabled = false)
                             AppModule.authRepository.signOut()
                         }
                     }

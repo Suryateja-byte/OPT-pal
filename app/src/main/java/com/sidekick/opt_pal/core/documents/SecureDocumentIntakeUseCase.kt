@@ -3,6 +3,7 @@ package com.sidekick.opt_pal.core.documents
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
+import com.sidekick.opt_pal.data.model.DocumentCategory
 import com.sidekick.opt_pal.core.session.UserSessionProvider
 import com.sidekick.opt_pal.data.model.DocumentUploadConsent
 import com.sidekick.opt_pal.data.repository.DocumentRepository
@@ -49,6 +50,8 @@ class SecureDocumentIntakeUseCase(
         fileUri: Uri,
         userTag: String,
         consent: DocumentUploadConsent,
+        documentCategory: DocumentCategory = DocumentCategory.GENERAL,
+        chatEligible: Boolean? = null,
         contentResolver: ContentResolver,
         onProgress: (bytesSent: Long, totalBytes: Long) -> Unit = { _, _ -> }
     ): Result<SecureDocumentIntakeResult> {
@@ -65,6 +68,8 @@ class SecureDocumentIntakeUseCase(
             fileName = fileName,
             userTag = userTag,
             consent = consent,
+            documentCategory = documentCategory,
+            chatEligible = chatEligible,
             contentResolver = contentResolver,
             onProgress = onProgress
         ).map {

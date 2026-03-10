@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.sidekick.opt_pal.core.analytics.AnalyticsLogger
 import com.sidekick.opt_pal.core.documents.SecureDocumentIntakeUseCase
 import com.sidekick.opt_pal.core.session.UserSessionProvider
+import com.sidekick.opt_pal.core.unemployment.UnemploymentAlertCoordinator
 import com.sidekick.opt_pal.data.model.CompleteSetupRequest
 import com.sidekick.opt_pal.data.model.DocumentMetadata
 import com.sidekick.opt_pal.data.model.DocumentProcessingMode
@@ -65,7 +66,8 @@ class SetupViewModel(
     private val authRepository: AuthRepository,
     private val documentRepository: DocumentRepository,
     private val userSessionProvider: UserSessionProvider,
-    private val secureDocumentIntakeUseCase: SecureDocumentIntakeUseCase
+    private val secureDocumentIntakeUseCase: SecureDocumentIntakeUseCase,
+    private val unemploymentAlertCoordinator: UnemploymentAlertCoordinator? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SetupUiState())
@@ -231,6 +233,10 @@ class SetupViewModel(
         _uiState.update { it.copy(draft = it.draft.copy(cipCode = value), errorMessage = null) }
     }
 
+    fun onMajorNameChanged(value: String) {
+        _uiState.update { it.copy(draft = it.draft.copy(majorName = value), errorMessage = null) }
+    }
+
     fun onShowDatePicker(field: SetupDateField) {
         _uiState.update { it.copy(showDatePickerFor = field, errorMessage = null) }
     }
@@ -278,11 +284,13 @@ class SetupViewModel(
                 sevisId = draft.sevisId.trim().takeIf { it.isNotBlank() },
                 schoolName = draft.schoolName.trim().takeIf { it.isNotBlank() },
                 cipCode = draft.cipCode.trim().takeIf { it.isNotBlank() },
+                majorName = draft.majorName.trim().takeIf { it.isNotBlank() },
                 onboardingSource = draft.onboardingSource.wireValue,
                 onboardingDocumentIds = draft.sourceDocumentIds
             )
             val result = authRepository.completeSetup(request)
             if (result.isSuccess) {
+                unemploymentAlertCoordinator?.syncForCurrentUser()
                 AnalyticsLogger.logSetupCompleted(selectedOptType.value)
             }
             _uiState.update {
@@ -425,7 +433,8 @@ class SetupViewModel(
                     authRepository = AppModule.authRepository,
                     documentRepository = AppModule.documentRepository,
                     userSessionProvider = AppModule.userSessionProvider,
-                    secureDocumentIntakeUseCase = AppModule.secureDocumentIntakeUseCase
+                    secureDocumentIntakeUseCase = AppModule.secureDocumentIntakeUseCase,
+                    unemploymentAlertCoordinator = AppModule.unemploymentAlertCoordinator
                 ) as T
             }
         }

@@ -1,6 +1,6 @@
 import * as admin from "firebase-admin";
 import { ImageAnnotatorClient } from "@google-cloud/vision";
-import { createDecipheriv } from "crypto";
+import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from "crypto";
 
 declare function require(moduleName: string): any;
 
@@ -96,6 +96,64 @@ export function sanitizeInlineFileName(fileName: string): string {
   return fileName.replace(/[^A-Za-z0-9._-]/g, "_");
 }
 
+export async function saveGeneratedSecureDocument(input: {
+  userId: string;
+  fileName: string;
+  userTag: string;
+  contentType: string;
+  documentCategory: string;
+  chatEligible: boolean;
+  bytes: Buffer;
+}): Promise<{documentId: string; storagePath: string; uploadedAt: number}> {
+  const documentId = randomUUID();
+  const storagePath = storagePathForDocument(input.userId, documentId);
+  const keyBytes = randomBytes(32);
+  const encryptedBytes = encryptDocumentBytes(input.bytes, keyBytes);
+  const wrappedDocumentKey = await wrapRawDocumentKey(keyBytes);
+  const uploadedAt = Date.now();
+
+  await storage.bucket().file(storagePath).save(encryptedBytes, {
+    resumable: false,
+    metadata: {
+      contentType: "application/octet-stream",
+      metadata: {
+        documentId,
+        originalContentType: input.contentType,
+      },
+    },
+  });
+
+  await documentRef(input.userId, documentId).set({
+    fileName: input.fileName,
+    userTag: input.userTag,
+    storagePath,
+    downloadUrl: "",
+    contentType: input.contentType,
+    byteSize: input.bytes.length,
+    encryptionVersion: 1,
+    processingMode: "storage_only",
+    processingConsentAcceptedAt: null,
+    consentProviders: [],
+    processingStatus: "stored",
+    processingError: "",
+    documentType: "",
+    documentCategory: input.documentCategory,
+    chatEligible: input.chatEligible,
+    summary: "",
+    extractedData: {},
+    processedAt: null,
+    uploadedAt,
+    wrappedDocumentKey,
+    hasEncryptedContent: true,
+  });
+
+  return {
+    documentId,
+    storagePath,
+    uploadedAt,
+  };
+}
+
 function getKmsKeyName(): string {
   const configured = process.env.DOCUMENT_KMS_KEY_NAME;
   if (configured) {
@@ -111,6 +169,14 @@ function getKmsKeyName(): string {
   return `projects/${projectId}/locations/${DEFAULT_KMS_LOCATION}/keyRings/${DEFAULT_KMS_KEY_RING}/cryptoKeys/${DEFAULT_KMS_KEY}`;
 }
 
+async function wrapRawDocumentKey(documentKey: Buffer): Promise<string> {
+  const [response] = await kmsClient.encrypt({
+    name: getKmsKeyName(),
+    plaintext: documentKey,
+  });
+  return Buffer.from(response.ciphertext as Uint8Array).toString("base64");
+}
+
 function decryptDocumentBytes(encryptedBytes: Buffer, keyBytes: Buffer): Buffer {
   if (encryptedBytes.length <= AES_IV_BYTES + AES_AUTH_TAG_BYTES) {
     throw new Error("Encrypted payload is malformed.");
@@ -124,4 +190,12 @@ function decryptDocumentBytes(encryptedBytes: Buffer, keyBytes: Buffer): Buffer 
   const decipher = createDecipheriv("aes-256-gcm", keyBytes, iv);
   decipher.setAuthTag(authTag);
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+}
+
+function encryptDocumentBytes(plainBytes: Buffer, keyBytes: Buffer): Buffer {
+  const iv = randomBytes(AES_IV_BYTES);
+  const cipher = createCipheriv("aes-256-gcm", keyBytes, iv);
+  const encrypted = Buffer.concat([cipher.update(plainBytes), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return Buffer.concat([iv, encrypted, authTag]);
 }

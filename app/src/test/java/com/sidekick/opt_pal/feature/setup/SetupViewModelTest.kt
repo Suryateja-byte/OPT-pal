@@ -118,6 +118,7 @@ class SetupViewModelTest {
         viewModel.onSevisIdChanged("N1234567890")
         viewModel.onSchoolNameChanged("State University")
         viewModel.onCipCodeChanged("11.0701")
+        viewModel.onMajorNameChanged("Computer Science")
         viewModel.onSave()
         advanceUntilIdle()
 
@@ -127,6 +128,7 @@ class SetupViewModelTest {
         assertEquals("N1234567890", request.sevisId)
         assertEquals("State University", request.schoolName)
         assertEquals("11.0701", request.cipCode)
+        assertEquals("Computer Science", request.majorName)
         assertEquals(OnboardingSource.MANUAL.wireValue, request.onboardingSource)
     }
 

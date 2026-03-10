@@ -24,6 +24,7 @@ class DashboardScreenTest {
     @Test
     fun rendersGreetingAndHandlesFabClick() {
         var addEmploymentClicked = false
+        var travelClicked = false
         val state = DashboardUiState(
             isLoading = false,
             displayName = "Alex",
@@ -34,7 +35,8 @@ class DashboardScreenTest {
                     employerName = "Acme",
                     jobTitle = "Engineer",
                     startDate = System.currentTimeMillis() - 1_000,
-                    endDate = null
+                    endDate = null,
+                    hoursPerWeek = 40
                 )
             ),
             pendingReportingCount = 2
@@ -46,6 +48,9 @@ class DashboardScreenTest {
                     state = state,
                     onAddEmployment = { addEmploymentClicked = true },
                     onEditEmployment = {},
+                    onOpenTaxRefund = {},
+                    onOpenTravelAdvisor = { travelClicked = true },
+                    onOpenCaseStatus = {},
                     onOpenReporting = {},
                     onOpenVault = {},
                     onSendFeedback = {},
@@ -54,13 +59,18 @@ class DashboardScreenTest {
                     onOpenChat = {},
                     onDeleteEmployment = {},
                     onSignOut = {},
-                    onReprocessDocuments = {}
+                    onReprocessDocuments = {},
+                    onCounterAction = {},
+                    showEnableAlertsAction = false,
+                    onEnableAlerts = {}
                 )
             }
         }
 
-        composeRule.onNodeWithTag(UiTestTags.DASHBOARD_GREETING).assertTextContains("Welcome back")
+        composeRule.onNodeWithTag(UiTestTags.DASHBOARD_GREETING).assertTextContains("Hello")
+        composeRule.onNodeWithTag(UiTestTags.DASHBOARD_TRAVEL_ADVISOR_CARD).performClick()
         composeRule.onNodeWithTag(UiTestTags.DASHBOARD_FAB).performClick()
+        assertTrue(travelClicked)
         assertTrue(addEmploymentClicked)
     }
 }

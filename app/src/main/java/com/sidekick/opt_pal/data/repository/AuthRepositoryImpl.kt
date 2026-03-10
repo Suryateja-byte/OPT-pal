@@ -36,6 +36,12 @@ class AuthRepositoryImpl : AuthRepository {
             snapshot.toUserProfile()
         }
 
+    override suspend fun getUserProfileSnapshot(uid: String): Result<UserProfile?> {
+        return runCatching {
+            usersCollection.document(uid).get().await().toUserProfile()
+        }
+    }
+
     override suspend fun signIn(email: String, password: String): Result<Unit> {
         val sanitizedEmail = email.trim()
         val sanitizedPassword = password.trim()
@@ -73,14 +79,57 @@ class AuthRepositoryImpl : AuthRepository {
             "onboardingDocumentIds" to request.onboardingDocumentIds,
             "onboardingConfirmedAt" to request.onboardingConfirmedAt
         )
+        if (!request.optType.equals("stem", ignoreCase = true)) {
+            payload["unemploymentTrackingStartDate"] = Timestamp(Date(request.optStartDate))
+        }
         request.optEndDate?.let { payload["optEndDate"] = Timestamp(Date(it)) }
         request.sevisId?.takeIf { it.isNotBlank() }?.let { payload["sevisId"] = it }
         request.schoolName?.takeIf { it.isNotBlank() }?.let { payload["schoolName"] = it }
         request.cipCode?.takeIf { it.isNotBlank() }?.let { payload["cipCode"] = it }
+        request.majorName?.takeIf { it.isNotBlank() }?.let { payload["majorName"] = it }
         currentUser.email?.let { payload["email"] = it }
 
         return runCatching {
             usersCollection.document(uid).set(payload, SetOptions.merge()).await()
+        }
+    }
+
+    override suspend fun updateUnemploymentTrackingStartDate(dateMillis: Long): Result<Unit> {
+        val currentUser = auth.currentUser
+            ?: return Result.failure(IllegalStateException("No authenticated user"))
+        return runCatching {
+            usersCollection.document(currentUser.uid)
+                .set(
+                    mapOf("unemploymentTrackingStartDate" to Timestamp(Date(dateMillis))),
+                    SetOptions.merge()
+                )
+                .await()
+        }
+    }
+
+    override suspend fun updateMajorName(majorName: String): Result<Unit> {
+        val currentUser = auth.currentUser
+            ?: return Result.failure(IllegalStateException("No authenticated user"))
+        return runCatching {
+            usersCollection.document(currentUser.uid)
+                .set(
+                    mapOf("majorName" to majorName.trim()),
+                    SetOptions.merge()
+                )
+                .await()
+        }
+    }
+
+    override suspend fun updateFirstUsStudentTaxYear(taxYear: Int): Result<Unit> {
+        val currentUser = auth.currentUser
+            ?: return Result.failure(IllegalStateException("No authenticated user"))
+        return runCatching {
+            usersCollection.document(currentUser.uid)
+                .set(
+                    mapOf("firstUsStudentTaxYear" to taxYear),
+                    SetOptions.merge()
+                )
+                .await()
         }
     }
 
@@ -122,12 +171,16 @@ private fun DocumentSnapshot.toUserProfile(): UserProfile? {
     return UserProfile(
         uid = getString("uid").orEmpty(),
         email = getString("email").orEmpty(),
+        travelAdvisorEnabled = getBoolean("travelAdvisorEnabled"),
         optType = getString("optType"),
         optStartDate = getDateField("optStartDate"),
+        unemploymentTrackingStartDate = getDateField("unemploymentTrackingStartDate"),
         optEndDate = getDateField("optEndDate"),
         sevisId = getString("sevisId"),
         schoolName = getString("schoolName"),
         cipCode = getString("cipCode"),
+        majorName = getString("majorName"),
+        firstUsStudentTaxYear = getLong("firstUsStudentTaxYear")?.toInt(),
         onboardingSource = getString("onboardingSource"),
         onboardingDocumentIds = onboardingDocumentIds,
         onboardingConfirmedAt = getDateField("onboardingConfirmedAt")

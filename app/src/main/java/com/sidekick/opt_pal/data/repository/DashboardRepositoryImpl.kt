@@ -28,6 +28,16 @@ class DashboardRepositoryImpl : DashboardRepository {
             }
     }
 
+    override suspend fun getEmploymentsSnapshot(uid: String): Result<List<Employment>> {
+        return runCatching {
+            employmentCollection(uid)
+                .orderBy("startDate", Query.Direction.DESCENDING)
+                .get()
+                .await()
+                .toObjects<Employment>()
+        }
+    }
+
     override suspend fun addEmployment(uid: String, employment: Employment): Result<Unit> {
         return runCatching {
             val document = if (employment.id.isBlank()) {

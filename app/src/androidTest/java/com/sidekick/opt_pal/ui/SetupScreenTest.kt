@@ -46,6 +46,7 @@ class SetupScreenTest {
                     onSevisIdChanged = {},
                     onSchoolNameChanged = {},
                     onCipCodeChanged = {},
+                    onMajorNameChanged = {},
                     onBackToSource = {}
                 )
             }
@@ -86,6 +87,7 @@ class SetupScreenTest {
                     onSevisIdChanged = {},
                     onSchoolNameChanged = {},
                     onCipCodeChanged = {},
+                    onMajorNameChanged = {},
                     onBackToSource = {}
                 )
             }

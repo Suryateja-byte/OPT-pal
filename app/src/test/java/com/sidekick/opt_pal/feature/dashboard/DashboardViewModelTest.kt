@@ -5,6 +5,7 @@ import com.sidekick.opt_pal.data.model.Employment
 import com.sidekick.opt_pal.data.model.ReportingObligation
 import com.sidekick.opt_pal.data.model.UserProfile
 import com.sidekick.opt_pal.testing.fakes.FakeAuthRepository
+import com.sidekick.opt_pal.testing.fakes.FakeCaseStatusRepository
 import com.sidekick.opt_pal.testing.fakes.FakeDashboardRepository
 import com.sidekick.opt_pal.testing.fakes.FakeDocumentRepository
 import com.sidekick.opt_pal.testing.fakes.FakeReportingRepository
@@ -14,6 +15,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -33,12 +35,14 @@ class DashboardViewModelTest {
         val authRepository = FakeAuthRepository()
         val dashboardRepository = FakeDashboardRepository()
         val reportingRepository = FakeReportingRepository()
+        val caseStatusRepository = FakeCaseStatusRepository()
         val documentRepository = FakeDocumentRepository()
         val now = date(2024, 1, 20)
         val viewModel = DashboardViewModel(
             authRepository,
             dashboardRepository,
             reportingRepository,
+            caseStatusRepository,
             documentRepository
         ) { now }
 
@@ -56,7 +60,8 @@ class DashboardViewModelTest {
                     employerName = "Acme",
                     jobTitle = "Engineer",
                     startDate = date(2024, 1, 5),
-                    endDate = null
+                    endDate = null,
+                    hoursPerWeek = 40
                 )
             )
         )
@@ -75,6 +80,7 @@ class DashboardViewModelTest {
         assertEquals(optStart, state.optStartDate)
         assertEquals(4, state.unemploymentDaysUsed)
         assertEquals(150, state.unemploymentDaysAllowed)
+        assertFalse(state.clockRunningNow)
         assertEquals(1, state.pendingReportingCount)
         assertEquals(date(2024, 2, 1), state.nextReportingDue)
     }
@@ -84,11 +90,13 @@ class DashboardViewModelTest {
         val authRepository = FakeAuthRepository()
         val dashboardRepository = FakeDashboardRepository()
         val reportingRepository = FakeReportingRepository()
+        val caseStatusRepository = FakeCaseStatusRepository()
         val documentRepository = FakeDocumentRepository()
         val viewModel = DashboardViewModel(
             authRepository,
             dashboardRepository,
             reportingRepository,
+            caseStatusRepository,
             documentRepository
         )
         val firebaseUser = mockUser("user-2")
@@ -99,6 +107,83 @@ class DashboardViewModelTest {
         advanceUntilIdle()
 
         assertTrue(dashboardRepository.deletedEmploymentIds.contains("job-22"))
+    }
+
+    @Test
+    fun missingHoursShowsReviewState() = runTest {
+        val authRepository = FakeAuthRepository()
+        val dashboardRepository = FakeDashboardRepository()
+        val reportingRepository = FakeReportingRepository()
+        val caseStatusRepository = FakeCaseStatusRepository()
+        val documentRepository = FakeDocumentRepository()
+        val viewModel = DashboardViewModel(
+            authRepository,
+            dashboardRepository,
+            reportingRepository,
+            caseStatusRepository,
+            documentRepository
+        ) { date(2024, 2, 1) }
+
+        val firebaseUser = mockUser("user-3")
+        authRepository.emitUser(firebaseUser)
+        authRepository.emitProfile(
+            "user-3",
+            UserProfile(uid = "user-3", email = "test@example.com", optType = "initial", optStartDate = date(2024, 1, 1))
+        )
+        dashboardRepository.setEmployments(
+            listOf(
+                Employment(
+                    id = "job-hours",
+                    employerName = "Acme",
+                    jobTitle = "Engineer",
+                    startDate = date(2024, 1, 10),
+                    endDate = null,
+                    hoursPerWeek = null
+                )
+            )
+        )
+
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(com.sidekick.opt_pal.core.calculations.UnemploymentDataQualityState.NEEDS_HOURS_REVIEW, state.dataQualityState)
+        assertEquals("Review employment hours", state.unemploymentActionLabel)
+        assertEquals("job-hours", state.firstEmploymentMissingHoursId)
+    }
+
+    @Test
+    fun stemWithoutTrackingStartShowsMigrationCta() = runTest {
+        val authRepository = FakeAuthRepository()
+        val dashboardRepository = FakeDashboardRepository()
+        val reportingRepository = FakeReportingRepository()
+        val caseStatusRepository = FakeCaseStatusRepository()
+        val documentRepository = FakeDocumentRepository()
+        val viewModel = DashboardViewModel(
+            authRepository,
+            dashboardRepository,
+            reportingRepository,
+            caseStatusRepository,
+            documentRepository
+        ) { date(2025, 3, 1) }
+
+        val firebaseUser = mockUser("user-4")
+        authRepository.emitUser(firebaseUser)
+        authRepository.emitProfile(
+            "user-4",
+            UserProfile(
+                uid = "user-4",
+                email = "test@example.com",
+                optType = "stem",
+                optStartDate = date(2025, 1, 1),
+                unemploymentTrackingStartDate = null
+            )
+        )
+
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(com.sidekick.opt_pal.core.calculations.UnemploymentDataQualityState.NEEDS_STEM_CYCLE_START, state.dataQualityState)
+        assertEquals("Add original OPT start date", state.unemploymentActionLabel)
     }
 
     private fun mockUser(uid: String): FirebaseUser {

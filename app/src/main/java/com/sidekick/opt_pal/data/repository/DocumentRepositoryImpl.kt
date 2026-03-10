@@ -13,6 +13,7 @@ import com.google.firebase.storage.StorageMetadata
 import com.google.firebase.storage.ktx.storage
 import com.sidekick.opt_pal.core.security.DocumentCryptoService
 import com.sidekick.opt_pal.core.security.SecureDocumentContentClient
+import com.sidekick.opt_pal.data.model.DocumentCategory
 import com.sidekick.opt_pal.data.model.DocumentMetadata
 import com.sidekick.opt_pal.data.model.DocumentUploadConsent
 import com.sidekick.opt_pal.data.model.SecureDocumentContent
@@ -49,6 +50,8 @@ class DocumentRepositoryImpl(
         fileName: String,
         userTag: String,
         consent: DocumentUploadConsent,
+        documentCategory: DocumentCategory,
+        chatEligible: Boolean?,
         contentResolver: ContentResolver,
         onProgress: (bytesSent: Long, totalBytes: Long) -> Unit
     ): Result<Unit> = withContext(Dispatchers.IO) {
@@ -65,6 +68,11 @@ class DocumentRepositoryImpl(
                 contentType = contentType,
                 byteSize = plainBytes.size.toLong(),
                 consent = consent,
+                documentCategory = documentCategory,
+                chatEligible = chatEligible ?: (
+                    documentCategory != DocumentCategory.TAX_SENSITIVE &&
+                        consent.processingMode == com.sidekick.opt_pal.data.model.DocumentProcessingMode.ANALYZE
+                    ),
                 encryptedDocumentKey = Base64.encodeToString(encryptedPayload.keyBytes, Base64.NO_WRAP)
             )
 
@@ -141,6 +149,8 @@ class DocumentRepositoryImpl(
         contentType: String,
         byteSize: Long,
         consent: DocumentUploadConsent,
+        documentCategory: DocumentCategory,
+        chatEligible: Boolean,
         encryptedDocumentKey: String
     ): SecureUploadPreparation {
         val response = functions
@@ -154,6 +164,8 @@ class DocumentRepositoryImpl(
                     "processingMode" to consent.processingMode.wireValue,
                     "processingConsentAcceptedAt" to consent.acceptedAt,
                     "consentProviders" to consent.providers,
+                    "documentCategory" to documentCategory.wireValue,
+                    "chatEligible" to chatEligible,
                     "encryptedDocumentKey" to encryptedDocumentKey
                 )
             )

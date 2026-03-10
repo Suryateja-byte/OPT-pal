@@ -42,10 +42,24 @@ class AddEmploymentViewModelTest {
     }
 
     @Test
+    fun saveEmploymentRequiresValidHours() = runTest {
+        val viewModel = AddEmploymentViewModel(dashboardRepository, reportingRepository, userSessionProvider)
+        viewModel.onEmployerNameChange("Acme")
+        viewModel.onJobTitleChange("Engineer")
+        viewModel.onStartDateSelected(1_000L)
+        viewModel.onHoursPerWeekChange("0")
+
+        viewModel.saveEmployment()
+
+        assertEquals("Enter valid hours per week (1-168).", viewModel.uiState.value.errorMessage)
+    }
+
+    @Test
     fun saveEmploymentPersistsData() = runTest {
         val viewModel = AddEmploymentViewModel(dashboardRepository, reportingRepository, userSessionProvider)
         viewModel.onEmployerNameChange("Acme")
         viewModel.onJobTitleChange("Engineer")
+        viewModel.onHoursPerWeekChange("40")
         val startDate = 1000L
         viewModel.onStartDateSelected(startDate)
         viewModel.onIsCurrentJobChange(false)
@@ -58,18 +72,19 @@ class AddEmploymentViewModelTest {
         val savedEmployment = dashboardRepository.addedEmployments.single()
         assertEquals("Acme", savedEmployment.employerName)
         assertEquals(startDate, savedEmployment.startDate)
-        assertEquals(1, reportingRepository.addedObligations.size)
-        val obligation = reportingRepository.addedObligations.first()
-        assertEquals(startDate + 10 * 86_400_000L, obligation.dueDate)
+        assertEquals(40, savedEmployment.hoursPerWeek)
+        assertEquals(1, reportingRepository.startedWizards.size)
+        assertEquals("wizard-1", viewModel.uiState.value.createdWizardId)
     }
 
     @Test
-    fun editEmploymentUpdatesExistingEntryWithoutNewReportingTask() = runTest {
+    fun editEmploymentEndingCurrentJobCreatesWizard() = runTest {
         val existing = Employment(
             id = "job-1",
             employerName = "Acme",
             jobTitle = "Engineer",
             startDate = 1_000L,
+            hoursPerWeek = 20,
             endDate = null
         )
         dashboardRepository.setEmployments(listOf(existing))
@@ -85,6 +100,7 @@ class AddEmploymentViewModelTest {
         assertEquals("Acme", viewModel.uiState.value.employerName)
 
         viewModel.onJobTitleChange("Senior Engineer")
+        viewModel.onHoursPerWeekChange("25")
         viewModel.onIsCurrentJobChange(false)
         viewModel.onEndDateSelected(2_000L)
 
@@ -94,6 +110,36 @@ class AddEmploymentViewModelTest {
         val savedEmployment = dashboardRepository.addedEmployments.last()
         assertEquals(existing.id, savedEmployment.id)
         assertEquals("Senior Engineer", savedEmployment.jobTitle)
-        assertTrue("No extra reporting tasks", reportingRepository.addedObligations.isEmpty())
+        assertEquals(25, savedEmployment.hoursPerWeek)
+        assertEquals(1, reportingRepository.startedWizards.size)
+        assertEquals("wizard-1", viewModel.uiState.value.createdWizardId)
+    }
+
+    @Test
+    fun editEmploymentWithoutEndingDoesNotCreateWizard() = runTest {
+        val existing = Employment(
+            id = "job-2",
+            employerName = "Beta",
+            jobTitle = "Analyst",
+            startDate = 2_000L,
+            hoursPerWeek = 40,
+            endDate = null
+        )
+        dashboardRepository.setEmployments(listOf(existing))
+
+        val viewModel = AddEmploymentViewModel(
+            dashboardRepository,
+            reportingRepository,
+            userSessionProvider,
+            employmentId = existing.id
+        )
+
+        advanceUntilIdle()
+        viewModel.onJobTitleChange("Senior Analyst")
+        viewModel.onHoursPerWeekChange("40")
+        viewModel.saveEmployment()
+        advanceUntilIdle()
+
+        assertTrue(reportingRepository.startedWizards.isEmpty())
     }
 }

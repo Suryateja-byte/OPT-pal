@@ -146,6 +146,7 @@ fun SetupRoute(
         onSevisIdChanged = viewModel::onSevisIdChanged,
         onSchoolNameChanged = viewModel::onSchoolNameChanged,
         onCipCodeChanged = viewModel::onCipCodeChanged,
+        onMajorNameChanged = viewModel::onMajorNameChanged,
         onBackToSource = viewModel::backToSource,
         modifier = modifier
     )
@@ -170,6 +171,7 @@ internal fun SetupScreen(
     onSevisIdChanged: (String) -> Unit,
     onSchoolNameChanged: (String) -> Unit,
     onCipCodeChanged: (String) -> Unit,
+    onMajorNameChanged: (String) -> Unit,
     onBackToSource: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -222,6 +224,7 @@ internal fun SetupScreen(
                             onSevisIdChanged = onSevisIdChanged,
                             onSchoolNameChanged = onSchoolNameChanged,
                             onCipCodeChanged = onCipCodeChanged,
+                            onMajorNameChanged = onMajorNameChanged,
                             onBackToSource = onBackToSource
                         )
                     }
@@ -369,6 +372,7 @@ private fun SetupReviewSection(
     onSevisIdChanged: (String) -> Unit,
     onSchoolNameChanged: (String) -> Unit,
     onCipCodeChanged: (String) -> Unit,
+    onMajorNameChanged: (String) -> Unit,
     onBackToSource: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -464,6 +468,14 @@ private fun SetupReviewSection(
             testTag = UiTestTags.SETUP_CIP_FIELD
         )
         FieldSourceLabel(state, OnboardingField.CIP_CODE)
+
+        SetupTextField(
+            value = state.draft.majorName,
+            onValueChange = onMajorNameChanged,
+            label = "Major name",
+            testTag = UiTestTags.SETUP_MAJOR_FIELD
+        )
+        FieldSourceLabel(state, OnboardingField.MAJOR_NAME)
 
         Button(
             onClick = onSave,

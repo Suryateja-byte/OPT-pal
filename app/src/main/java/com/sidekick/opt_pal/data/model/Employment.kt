@@ -7,5 +7,6 @@ data class Employment(
     val employerName: String = "",
     val startDate: Long = 0L,
     val endDate: Long? = null,
-    val jobTitle: String = ""
+    val jobTitle: String = "",
+    val hoursPerWeek: Int? = null
 )

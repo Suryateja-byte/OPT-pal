@@ -27,7 +27,8 @@ enum class OnboardingField {
     OPT_END_DATE,
     SEVIS_ID,
     SCHOOL_NAME,
-    CIP_CODE
+    CIP_CODE,
+    MAJOR_NAME
 }
 
 data class OnboardingDocumentCandidate(
@@ -43,6 +44,7 @@ data class NormalizedOnboardingFields(
     val sevisId: String? = null,
     val schoolName: String? = null,
     val cipCode: String? = null,
+    val majorName: String? = null,
     val optType: OptType? = null,
     val optStartDate: Long? = null,
     val optEndDate: Long? = null,
@@ -57,6 +59,7 @@ data class OnboardingProfileDraft(
     val sevisId: String = "",
     val schoolName: String = "",
     val cipCode: String = "",
+    val majorName: String = "",
     val onboardingSource: OnboardingSource = OnboardingSource.MANUAL,
     val sourceDocumentIds: List<String> = emptyList(),
     val fieldSources: Map<OnboardingField, String> = emptyMap()
@@ -69,6 +72,7 @@ data class CompleteSetupRequest(
     val sevisId: String? = null,
     val schoolName: String? = null,
     val cipCode: String? = null,
+    val majorName: String? = null,
     val onboardingSource: String = OnboardingSource.MANUAL.wireValue,
     val onboardingDocumentIds: List<String> = emptyList(),
     val onboardingConfirmedAt: Long = System.currentTimeMillis()

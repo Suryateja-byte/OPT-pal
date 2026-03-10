@@ -1,5 +1,9 @@
 package com.sidekick.opt_pal.feature.dashboard
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.VisibleForTesting
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -33,17 +37,24 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Feedback
+import androidx.compose.material.icons.filled.FlightTakeoff
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.RequestQuote
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -58,14 +69,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sidekick.opt_pal.core.analytics.AnalyticsLogger
+import com.sidekick.opt_pal.core.calculations.UnemploymentDataQualityState
+import com.sidekick.opt_pal.di.AppModule
 import com.sidekick.opt_pal.data.model.Employment
 import com.sidekick.opt_pal.ui.UiTestTags
 import java.text.SimpleDateFormat
@@ -73,10 +89,14 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardRoute(
     onAddEmployment: () -> Unit,
     onEditEmployment: (String) -> Unit,
+    onOpenTaxRefund: () -> Unit,
+    onOpenTravelAdvisor: () -> Unit,
+    onOpenCaseStatus: () -> Unit,
     onOpenReporting: () -> Unit,
     onOpenVault: () -> Unit,
     onSendFeedback: () -> Unit,
@@ -87,12 +107,54 @@ fun DashboardRoute(
     viewModel: DashboardViewModel = viewModel(factory = DashboardViewModel.Factory)
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var showTrackingStartDatePicker by remember { mutableStateOf(false) }
+    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = uiState.unemploymentTrackingStartDate ?: uiState.optStartDate)
+    val notificationsEnabled = context.areOptStatusNotificationsEnabled()
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            AppModule.userSessionProvider.currentUserId?.let(AppModule.unemploymentAlertScheduler::enqueueImmediate)
+        }
+    }
+
     LaunchedEffect(Unit) { AnalyticsLogger.logScreenView("Dashboard") }
+    LaunchedEffect(uiState.unemploymentTrackingStartDate, uiState.optStartDate) {
+        val preferredDate = uiState.unemploymentTrackingStartDate ?: uiState.optStartDate
+        if (datePickerState.selectedDateMillis != preferredDate) {
+            datePickerState.selectedDateMillis = preferredDate
+        }
+    }
+
+    if (showTrackingStartDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showTrackingStartDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let(viewModel::updateUnemploymentTrackingStartDate)
+                    showTrackingStartDatePicker = false
+                }) {
+                    Text("Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTrackingStartDatePicker = false }) {
+                    Text("Cancel")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 
     DashboardScreen(
         state = uiState,
         onAddEmployment = onAddEmployment,
         onEditEmployment = onEditEmployment,
+        onOpenTaxRefund = onOpenTaxRefund,
+        onOpenTravelAdvisor = onOpenTravelAdvisor,
+        onOpenCaseStatus = onOpenCaseStatus,
         onOpenReporting = onOpenReporting,
         onOpenVault = onOpenVault,
         onSendFeedback = onSendFeedback,
@@ -102,6 +164,25 @@ fun DashboardRoute(
         onDeleteEmployment = viewModel::deleteEmployment,
         onSignOut = viewModel::onSignOut,
         onReprocessDocuments = viewModel::reprocessDocuments,
+        onCounterAction = {
+            when (uiState.dataQualityState) {
+                UnemploymentDataQualityState.NEEDS_HOURS_REVIEW -> {
+                    uiState.firstEmploymentMissingHoursId?.let(onEditEmployment)
+                }
+                UnemploymentDataQualityState.NEEDS_STEM_CYCLE_START -> {
+                    showTrackingStartDatePicker = true
+                }
+                UnemploymentDataQualityState.READY -> Unit
+            }
+        },
+        showEnableAlertsAction = uiState.dataQualityState == UnemploymentDataQualityState.READY && !notificationsEnabled,
+        onEnableAlerts = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        },
         modifier = modifier
     )
 }
@@ -112,6 +193,9 @@ internal fun DashboardScreen(
     state: DashboardUiState,
     onAddEmployment: () -> Unit,
     onEditEmployment: (String) -> Unit,
+    onOpenTaxRefund: () -> Unit,
+    onOpenTravelAdvisor: () -> Unit,
+    onOpenCaseStatus: () -> Unit,
     onOpenReporting: () -> Unit,
     onOpenVault: () -> Unit,
     onSendFeedback: () -> Unit,
@@ -121,6 +205,9 @@ internal fun DashboardScreen(
     onDeleteEmployment: (String) -> Unit,
     onSignOut: () -> Unit,
     onReprocessDocuments: () -> Unit,
+    onCounterAction: () -> Unit,
+    showEnableAlertsAction: Boolean,
+    onEnableAlerts: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var isVisible by remember { mutableStateOf(false) }
@@ -169,6 +256,20 @@ internal fun DashboardScreen(
                             HeaderSection(state)
                             Spacer(modifier = Modifier.height(60.dp))
                             MinimalHero(state)
+                            Spacer(modifier = Modifier.height(24.dp))
+                            CounterStatusSection(
+                                state = state,
+                                onCounterAction = onCounterAction,
+                                showEnableAlertsAction = showEnableAlertsAction,
+                                onEnableAlerts = onEnableAlerts
+                            )
+                            if (state.uscisCaseSummary != null) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                UscisSummaryCard(
+                                    state = state,
+                                    onOpenCaseStatus = onOpenCaseStatus
+                                )
+                            }
                             Spacer(modifier = Modifier.height(60.dp))
                         }
                     }
@@ -182,6 +283,9 @@ internal fun DashboardScreen(
                         Column(modifier = Modifier.padding(horizontal = 24.dp)) {
                             ActionGrid(
                                 state = state,
+                                onOpenTaxRefund = onOpenTaxRefund,
+                                onOpenTravelAdvisor = onOpenTravelAdvisor,
+                                onOpenCaseStatus = onOpenCaseStatus,
                                 onOpenReporting = onOpenReporting,
                                 onOpenVault = onOpenVault,
                                 onScanDocument = onScanDocument,
@@ -230,7 +334,8 @@ private fun HeaderSection(state: DashboardUiState) {
             text = "Hello,\n${state.displayName}",
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onBackground,
-            fontWeight = FontWeight.Normal // Keep it lighter for elegance
+            fontWeight = FontWeight.Normal, // Keep it lighter for elegance
+            modifier = Modifier.testTag(UiTestTags.DASHBOARD_GREETING)
         )
     }
 }
@@ -250,7 +355,7 @@ private fun MinimalHero(state: DashboardUiState) {
                 color = MaterialTheme.colorScheme.onBackground
             )
             Text(
-                text = "Days Remaining",
+                text = if (state.isEstimate) "Days Remaining (Est.)" else "Days Remaining",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -259,6 +364,12 @@ private fun MinimalHero(state: DashboardUiState) {
                 text = "${state.unemploymentDaysUsed} used of ${state.unemploymentDaysAllowed}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = if (state.clockRunningNow) "Clock running" else "Clock paused",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (state.clockRunningNow) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
             )
         }
 
@@ -277,6 +388,96 @@ private fun MinimalHero(state: DashboardUiState) {
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp)
             )
+        }
+    }
+}
+
+@Composable
+private fun CounterStatusSection(
+    state: DashboardUiState,
+    onCounterAction: () -> Unit,
+    showEnableAlertsAction: Boolean,
+    onEnableAlerts: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(UiTestTags.DASHBOARD_COUNTER_STATUS),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = state.unemploymentStatusMessage,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (state.unemploymentActionLabel != null) {
+                TextButton(
+                    onClick = onCounterAction,
+                    modifier = Modifier.testTag(UiTestTags.DASHBOARD_COUNTER_ACTION)
+                ) {
+                    Text(state.unemploymentActionLabel)
+                }
+            }
+            if (showEnableAlertsAction) {
+                TextButton(onClick = onEnableAlerts) {
+                    Text("Enable alert notifications")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UscisSummaryCard(
+    state: DashboardUiState,
+    onOpenCaseStatus: () -> Unit
+) {
+    val summary = state.uscisCaseSummary ?: return
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(UiTestTags.DASHBOARD_USCIS_SUMMARY),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        onClick = onOpenCaseStatus
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "USCIS CASE STATUS",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = summary.stage.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() },
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = summary.statusText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "Last checked ${formatDashboardDateTime(summary.lastCheckedAt)}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (summary.hasRecentChange) {
+                Text(
+                    text = "Update detected recently",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }
@@ -317,6 +518,9 @@ fun MinimalCircularProgress(
 @Composable
 private fun ActionGrid(
     state: DashboardUiState,
+    onOpenTaxRefund: () -> Unit,
+    onOpenTravelAdvisor: () -> Unit,
+    onOpenCaseStatus: () -> Unit,
     onOpenReporting: () -> Unit,
     onOpenVault: () -> Unit,
     onScanDocument: () -> Unit,
@@ -352,6 +556,37 @@ private fun ActionGrid(
                 icon = Icons.Filled.SmartToy,
                 onClick = onOpenChat
             )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            MinimalActionItem(
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(UiTestTags.DASHBOARD_TRAVEL_ADVISOR_CARD),
+                title = "Travel",
+                icon = Icons.Filled.FlightTakeoff,
+                onClick = onOpenTravelAdvisor
+            )
+            MinimalActionItem(
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(UiTestTags.DASHBOARD_TAX_REFUND_CARD),
+                title = "Tax Refund",
+                icon = Icons.Filled.RequestQuote,
+                onClick = onOpenTaxRefund
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            MinimalActionItem(
+                modifier = Modifier.weight(1f),
+                title = "USCIS",
+                icon = Icons.Filled.Refresh,
+                hasAlert = state.uscisCaseSummary?.hasRecentChange == true,
+                onClick = onOpenCaseStatus
+            )
+            Surface(
+                modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.background
+            ) {}
         }
     }
 }
@@ -454,6 +689,17 @@ private fun EmploymentList(
     }
 }
 
+private fun android.content.Context.areOptStatusNotificationsEnabled(): Boolean {
+    return NotificationManagerCompat.from(this).areNotificationsEnabled() &&
+        (
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            )
+}
+
 @Composable
 private fun MinimalSupportSection(
     onSendFeedback: () -> Unit,
@@ -502,6 +748,13 @@ private fun MinimalSettingItem(
 private fun formatDateYear(timestamp: Long?): String {
     if (timestamp == null) return ""
     val formatter = SimpleDateFormat("MMM yyyy", Locale.US)
+    formatter.timeZone = TimeZone.getTimeZone("UTC")
+    return formatter.format(Date(timestamp))
+}
+
+private fun formatDashboardDateTime(timestamp: Long): String {
+    if (timestamp <= 0L) return "recently"
+    val formatter = SimpleDateFormat("MMM d, h:mm a 'UTC'", Locale.US)
     formatter.timeZone = TimeZone.getTimeZone("UTC")
     return formatter.format(Date(timestamp))
 }

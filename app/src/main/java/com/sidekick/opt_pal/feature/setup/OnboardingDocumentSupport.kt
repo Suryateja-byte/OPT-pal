@@ -91,6 +91,11 @@ fun buildOnboardingDraft(candidates: List<OnboardingDocumentCandidate>): Onboard
         fieldSources[OnboardingField.CIP_CODE] = sourceLabel(i20 ?: ead!!)
     }
 
+    val majorName = i20?.fields?.majorName.orEmpty().ifBlank { ead?.fields?.majorName.orEmpty() }
+    if (majorName.isNotBlank()) {
+        fieldSources[OnboardingField.MAJOR_NAME] = sourceLabel(i20 ?: ead!!)
+    }
+
     return OnboardingProfileDraft(
         optType = optType,
         optStartDate = optStartDate,
@@ -98,6 +103,7 @@ fun buildOnboardingDraft(candidates: List<OnboardingDocumentCandidate>): Onboard
         sevisId = sevisId,
         schoolName = schoolName,
         cipCode = cipCode,
+        majorName = majorName,
         onboardingSource = if (candidates.isEmpty()) OnboardingSource.MANUAL else OnboardingSource.DOCUMENT_AI,
         sourceDocumentIds = candidates.map { it.documentId },
         fieldSources = fieldSources
@@ -114,6 +120,14 @@ private fun normalizeOnboardingFields(
         ?.uppercase(Locale.US)
     val schoolName = firstString(values, "school_name", "schoolname", "university_name", "universityname")
     val cipCode = firstString(values, "cip_code", "cipcode", "major_code")
+    val majorName = firstString(
+        values,
+        "major_name",
+        "major",
+        "program_name",
+        "primary_major",
+        "major1"
+    )
     val explicitOptType = firstString(values, "opt_type", "opttype")
         ?.toOptTypeOrNull()
     val eadCategory = firstString(values, "ead_category", "category")
@@ -147,11 +161,13 @@ private fun normalizeOnboardingFields(
             sevisId = sevisId,
             schoolName = schoolName,
             cipCode = cipCode,
+            majorName = majorName,
             optType = inferredOptType,
             optStartDate = optStartDate,
             optEndDate = optEndDate
         )
         OnboardingDocumentType.EAD -> NormalizedOnboardingFields(
+            majorName = majorName,
             optType = inferredOptType,
             optStartDate = optStartDate,
             optEndDate = optEndDate,
@@ -174,6 +190,7 @@ private fun NormalizedOnboardingFields.isEmpty(): Boolean {
     return sevisId == null &&
         schoolName == null &&
         cipCode == null &&
+        majorName == null &&
         optType == null &&
         optStartDate == null &&
         optEndDate == null &&

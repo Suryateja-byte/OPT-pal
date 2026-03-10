@@ -80,6 +80,7 @@ private fun Long.toDateText(): String {
 @Composable
 fun AddEmploymentRoute(
     onNavigateBack: () -> Unit,
+    onOpenReportingWizard: (String) -> Unit,
     employmentId: String? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -107,7 +108,14 @@ fun AddEmploymentRoute(
     }
 
     LaunchedEffect(uiState.onSaveComplete) {
-        if (uiState.onSaveComplete) onNavigateBack()
+        if (uiState.onSaveComplete) {
+            val createdWizardId = uiState.createdWizardId
+            if (!createdWizardId.isNullOrBlank()) {
+                onOpenReportingWizard(createdWizardId)
+            } else {
+                onNavigateBack()
+            }
+        }
     }
 
     // Minimal Date Picker Dialogs
@@ -147,6 +155,7 @@ fun AddEmploymentRoute(
         state = uiState,
         onEmployerNameChange = viewModel::onEmployerNameChange,
         onJobTitleChange = viewModel::onJobTitleChange,
+        onHoursPerWeekChange = viewModel::onHoursPerWeekChange,
         onIsCurrentJobChange = viewModel::onIsCurrentJobChange,
         onRequestStartDate = viewModel::showStartDatePicker,
         onRequestEndDate = viewModel::showEndDatePicker,
@@ -164,6 +173,7 @@ internal fun AddEmploymentScreen(
     state: AddEmploymentUiState,
     onEmployerNameChange: (String) -> Unit,
     onJobTitleChange: (String) -> Unit,
+    onHoursPerWeekChange: (String) -> Unit,
     onIsCurrentJobChange: (Boolean) -> Unit,
     onRequestStartDate: () -> Unit,
     onRequestEndDate: () -> Unit,
@@ -245,6 +255,28 @@ internal fun AddEmploymentScreen(
                             placeholder = "e.g. Software Engineer",
                             testTag = UiTestTags.ADD_JOB_TITLE_FIELD
                         )
+
+                        MinimalTextInput(
+                            value = state.hoursPerWeek,
+                            onValueChange = onHoursPerWeekChange,
+                            label = "Hours Per Week",
+                            placeholder = "e.g. 40",
+                            testTag = UiTestTags.ADD_HOURS_FIELD,
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.None,
+                                imeAction = ImeAction.Next,
+                                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                            )
+                        )
+
+                        if (state.hoursPerWeek.toIntOrNull()?.let { it < 20 } == true) {
+                            Text(
+                                text = "Jobs below 20 hours/week do not stop the unemployment clock.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.testTag(UiTestTags.ADD_HOURS_WARNING)
+                            )
+                        }
                     }
 
                     // 3. Date Logic
@@ -343,7 +375,11 @@ private fun MinimalTextInput(
     onValueChange: (String) -> Unit,
     label: String,
     placeholder: String,
-    testTag: String
+    testTag: String,
+    keyboardOptions: KeyboardOptions = KeyboardOptions(
+        capitalization = KeyboardCapitalization.Sentences,
+        imeAction = ImeAction.Next
+    )
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
@@ -377,10 +413,7 @@ private fun MinimalTextInput(
                 cursorColor = MaterialTheme.colorScheme.primary
             ),
             singleLine = true,
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.Sentences,
-                imeAction = ImeAction.Next
-            )
+            keyboardOptions = keyboardOptions
         )
     }
 }

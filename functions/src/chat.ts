@@ -11,6 +11,8 @@ const model = vertexAI.getGenerativeModel({model: "gemini-1.5-flash-001"});
 type StoredDocument = {
   id: string;
   processingMode?: string;
+  documentCategory?: string;
+  chatEligible?: boolean;
   extractedData?: Record<string, unknown>;
   fileName?: string;
   userTag?: string;
@@ -39,7 +41,11 @@ export const chatWithDocuments = onCall(async (request) => {
       id: doc.id,
       ...(doc.data() as Omit<StoredDocument, "id">),
     }));
-    const aiVisibleDocuments = allDocuments.filter((doc) => doc.processingMode !== "storage_only");
+    const aiVisibleDocuments = allDocuments.filter((doc) =>
+      doc.processingMode !== "storage_only" &&
+      doc.documentCategory !== "tax_sensitive" &&
+      doc.chatEligible !== false
+    );
     if (aiVisibleDocuments.length === 0) {
       return {
         text: "Your vault currently has storage-only documents. Upload and analyze a document if you want AI answers from document content.",

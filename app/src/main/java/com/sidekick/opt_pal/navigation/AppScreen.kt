@@ -5,6 +5,19 @@ sealed class AppScreen(val route: String) {
     data object SignUp : AppScreen("signup")
     data object Setup : AppScreen("setup")
     data object Dashboard : AppScreen("dashboard")
+    data object TaxRefund : AppScreen("taxRefund")
+    data object TravelAdvisor : AppScreen("travelAdvisor")
+    data object CaseStatus : AppScreen("caseStatus?caseId={caseId}") {
+        const val CASE_ID_ARG = "caseId"
+
+        fun createRoute(caseId: String? = null): String {
+            return if (caseId.isNullOrBlank()) {
+                "caseStatus"
+            } else {
+                "caseStatus?caseId=$caseId"
+            }
+        }
+    }
     data object AddEmployment : AppScreen("addEmployment")
     data object EditEmployment : AppScreen("editEmployment/{employmentId}") {
         const val EMPLOYMENT_ID_ARG = "employmentId"
@@ -18,6 +31,22 @@ sealed class AppScreen(val route: String) {
                 "manageReporting"
             } else {
                 "manageReporting?obligationId=$obligationId"
+            }
+        }
+    }
+    data object ReportingWizard : AppScreen("reportingWizard?wizardId={wizardId}&obligationId={obligationId}") {
+        const val WIZARD_ID_ARG = "wizardId"
+        const val OBLIGATION_ID_ARG = "obligationId"
+
+        fun createRoute(wizardId: String? = null, obligationId: String? = null): String {
+            val params = buildList {
+                if (!wizardId.isNullOrBlank()) add("wizardId=$wizardId")
+                if (!obligationId.isNullOrBlank()) add("obligationId=$obligationId")
+            }
+            return if (params.isEmpty()) {
+                "reportingWizard"
+            } else {
+                "reportingWizard?${params.joinToString("&")}"
             }
         }
     }

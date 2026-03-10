@@ -68,7 +68,9 @@ class DocumentVaultViewModelTest {
                 uid = "user-1",
                 fileName = "Offer.pdf",
                 userTag = "Offer Letter",
-                processingMode = DocumentProcessingMode.ANALYZE
+                processingMode = DocumentProcessingMode.ANALYZE,
+                documentCategory = com.sidekick.opt_pal.data.model.DocumentCategory.GENERAL,
+                chatEligible = null
             ),
             repository.uploadRequests.single()
         )

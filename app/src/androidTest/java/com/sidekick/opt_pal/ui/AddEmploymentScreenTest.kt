@@ -31,11 +31,13 @@ class AddEmploymentScreenTest {
                     state = AddEmploymentUiState(
                         employerName = "Acme",
                         jobTitle = "Engineer",
+                        hoursPerWeek = "40",
                         startDate = System.currentTimeMillis(),
                         errorMessage = "Error"
                     ),
                     onEmployerNameChange = {},
                     onJobTitleChange = {},
+                    onHoursPerWeekChange = {},
                     onIsCurrentJobChange = {},
                     onRequestStartDate = {},
                     onRequestEndDate = {},

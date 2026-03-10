@@ -5,9 +5,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.sidekick.opt_pal.core.analytics.AnalyticsLogger
 import com.sidekick.opt_pal.core.session.UserSessionProvider
+import com.sidekick.opt_pal.core.unemployment.UnemploymentAlertCoordinator
 import com.sidekick.opt_pal.data.model.Employment
 import com.sidekick.opt_pal.data.model.ReportableEventType
+import com.sidekick.opt_pal.data.model.ReportingActionType
 import com.sidekick.opt_pal.data.model.ReportingObligation
+import com.sidekick.opt_pal.data.model.ReportingSource
+import com.sidekick.opt_pal.data.model.ReportingWizardEventType
 import com.sidekick.opt_pal.data.repository.DashboardRepository
 import com.sidekick.opt_pal.data.repository.ReportingRepository
 import com.sidekick.opt_pal.di.AppModule
@@ -15,10 +19,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 data class AddEmploymentUiState(
     val employerName: String = "",
     val jobTitle: String = "",
+    val hoursPerWeek: String = "",
     val startDate: Long? = null,
     val endDate: Long? = null,
     val isCurrentJob: Boolean = true,
@@ -27,7 +33,8 @@ data class AddEmploymentUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val onSaveComplete: Boolean = false,
-    val editingEmploymentId: String? = null
+    val editingEmploymentId: String? = null,
+    val createdWizardId: String? = null
 )
 
 private const val REPORTING_DEADLINE_DAYS = 10
@@ -37,8 +44,11 @@ class AddEmploymentViewModel(
     private val dashboardRepository: DashboardRepository,
     private val reportingRepository: ReportingRepository,
     private val userSessionProvider: UserSessionProvider,
+    private val unemploymentAlertCoordinator: UnemploymentAlertCoordinator? = null,
     private val employmentId: String? = null
 ) : ViewModel() {
+
+    private var originalEmployment: Employment? = null
 
     private val _uiState = MutableStateFlow(
         AddEmploymentUiState(
@@ -71,11 +81,13 @@ class AddEmploymentViewModel(
                         )
                     }
                 } else {
+                    originalEmployment = employment
                     _uiState.update {
                         it.copy(
                             editingEmploymentId = employmentId,
                             employerName = employment.employerName,
                             jobTitle = employment.jobTitle,
+                            hoursPerWeek = employment.hoursPerWeek?.toString().orEmpty(),
                             startDate = employment.startDate,
                             endDate = employment.endDate,
                             isCurrentJob = employment.endDate == null,
@@ -101,6 +113,11 @@ class AddEmploymentViewModel(
 
     fun onJobTitleChange(value: String) {
         _uiState.update { it.copy(jobTitle = value) }
+    }
+
+    fun onHoursPerWeekChange(value: String) {
+        val sanitized = value.filter(Char::isDigit).take(3)
+        _uiState.update { it.copy(hoursPerWeek = sanitized) }
     }
 
     fun onIsCurrentJobChange(value: Boolean) {
@@ -143,15 +160,21 @@ class AddEmploymentViewModel(
             _uiState.update { it.copy(errorMessage = "Please fill in all fields.") }
             return
         }
+        val parsedHours = state.hoursPerWeek.toIntOrNull()
+        if (parsedHours == null || parsedHours !in 1..168) {
+            _uiState.update { it.copy(errorMessage = "Enter valid hours per week (1-168).") }
+            return
+        }
         if (!state.isCurrentJob && state.endDate == null) {
             _uiState.update { it.copy(errorMessage = "Please select an end date for past employment.") }
             return
         }
         val editingId = state.editingEmploymentId
         val employment = Employment(
-            id = editingId.orEmpty(),
+            id = editingId ?: UUID.randomUUID().toString(),
             employerName = state.employerName,
             jobTitle = state.jobTitle,
+            hoursPerWeek = parsedHours,
             startDate = state.startDate,
             endDate = if (state.isCurrentJob) null else state.endDate
         )
@@ -159,11 +182,27 @@ class AddEmploymentViewModel(
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             val result = dashboardRepository.addEmployment(uid, employment)
             if (result.isSuccess) {
-                if (editingId == null) {
-                    createReportingTask(uid, employment)
+                val createdWizardId = when {
+                    editingId == null -> createWizardForEvent(
+                        uid = uid,
+                        eventType = ReportingWizardEventType.NEW_EMPLOYER,
+                        employment = employment,
+                        eventDate = employment.startDate
+                    )
+                    originalEmployment?.endDate == null && employment.endDate != null -> createWizardForEvent(
+                        uid = uid,
+                        eventType = ReportingWizardEventType.EMPLOYMENT_ENDED,
+                        employment = employment,
+                        eventDate = employment.endDate ?: System.currentTimeMillis()
+                    )
+                    else -> null
                 }
+                unemploymentAlertCoordinator?.syncForCurrentUser()
                 AnalyticsLogger.logEmploymentSaved(employment.employerName)
-                _uiState.value = AddEmploymentUiState(onSaveComplete = true)
+                _uiState.value = AddEmploymentUiState(
+                    onSaveComplete = true,
+                    createdWizardId = createdWizardId
+                )
             } else {
                 _uiState.update {
                     it.copy(isLoading = false, errorMessage = result.exceptionOrNull()?.message)
@@ -172,13 +211,49 @@ class AddEmploymentViewModel(
         }
     }
 
-    private suspend fun createReportingTask(uid: String, employment: Employment) {
-        val dueDate = employment.startDate + REPORTING_DEADLINE_DAYS * MILLIS_IN_DAY
+    private suspend fun createWizardForEvent(
+        uid: String,
+        eventType: ReportingWizardEventType,
+        employment: Employment,
+        eventDate: Long
+    ): String? {
+        val result = reportingRepository.startWizard(
+            uid = uid,
+            eventType = eventType,
+            relatedEmploymentId = employment.id,
+            eventDate = eventDate
+        )
+        val startResult = result.getOrElse {
+            createFallbackReportingTask(uid, eventType, employment, eventDate)
+            null
+        } ?: return null
+        return startResult.wizardId
+    }
+
+    private suspend fun createFallbackReportingTask(
+        uid: String,
+        eventType: ReportingWizardEventType,
+        employment: Employment,
+        eventDate: Long
+    ) {
+        val dueDate = eventDate + REPORTING_DEADLINE_DAYS * MILLIS_IN_DAY
         val obligation = ReportingObligation(
-            eventType = ReportableEventType.NEW_EMPLOYER.name,
-            description = "Report new employer: ${employment.employerName}",
-            eventDate = employment.startDate,
-            dueDate = dueDate
+            eventType = when (eventType) {
+                ReportingWizardEventType.NEW_EMPLOYER -> ReportableEventType.NEW_EMPLOYER.name
+                ReportingWizardEventType.EMPLOYMENT_ENDED -> ReportableEventType.EMPLOYER_ENDED.name
+                ReportingWizardEventType.MATERIAL_CHANGE -> ReportableEventType.EMPLOYMENT_UPDATED.name
+            },
+            description = when (eventType) {
+                ReportingWizardEventType.NEW_EMPLOYER -> "Report new employer: ${employment.employerName}"
+                ReportingWizardEventType.EMPLOYMENT_ENDED -> "Report employment ended: ${employment.employerName}"
+                ReportingWizardEventType.MATERIAL_CHANGE -> "Report material change: ${employment.employerName}"
+            },
+            eventDate = eventDate,
+            dueDate = dueDate,
+            createdBy = ReportingSource.AUTO.name,
+            relatedEmploymentId = employment.id,
+            actionType = ReportingActionType.MANUAL_ONLY.wireValue,
+            sourceEventType = eventType.wireValue
         )
         reportingRepository.addObligation(uid, obligation)
     }
@@ -192,6 +267,7 @@ class AddEmploymentViewModel(
                         AppModule.dashboardRepository,
                         AppModule.reportingRepository,
                         AppModule.userSessionProvider,
+                        AppModule.unemploymentAlertCoordinator,
                         employmentId
                     ) as T
                 }

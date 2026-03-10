@@ -73,6 +73,8 @@ dependencies {
     implementation("com.google.firebase:firebase-appcheck-playintegrity")
     implementation("com.google.firebase:firebase-appcheck-debug")
     implementation("com.google.firebase:firebase-functions-ktx")
+    implementation("com.google.firebase:firebase-config-ktx")
+    implementation("com.google.firebase:firebase-messaging-ktx")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
@@ -113,6 +115,9 @@ dependencies {
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
+
+    // WorkManager
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
     
     // ML Kit - Document Scanner
     implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1")

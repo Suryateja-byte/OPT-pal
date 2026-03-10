@@ -5,6 +5,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.sidekick.opt_pal.core.casestatus.EXTRA_USCIS_CASE_ID
 import com.sidekick.opt_pal.core.session.SessionViewModel
 import com.sidekick.opt_pal.di.AppModule
 import com.sidekick.opt_pal.ui.theme.OPTPalTheme
@@ -12,18 +16,28 @@ import com.sidekick.opt_pal.ui.theme.OPTPalTheme
 class MainActivity : ComponentActivity() {
 
     private val sessionViewModel: SessionViewModel by viewModels { SessionViewModel.Factory }
+    private var pendingUscisCaseId by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingUscisCaseId = intent.extractPendingUscisCaseId()
         enableEdgeToEdge()
         setContent {
             OPTPalTheme {
                 OPTPalApp(
                     sessionViewModel = sessionViewModel,
-                    securitySessionManager = AppModule.securitySessionManager
+                    securitySessionManager = AppModule.securitySessionManager,
+                    pendingUscisCaseId = pendingUscisCaseId,
+                    onPendingUscisCaseHandled = { pendingUscisCaseId = null }
                 )
             }
         }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingUscisCaseId = intent.extractPendingUscisCaseId()
     }
 
     override fun onResume() {
@@ -40,4 +54,8 @@ class MainActivity : ComponentActivity() {
         super.onUserInteraction()
         AppModule.securitySessionManager.recordUserInteraction()
     }
+}
+
+private fun android.content.Intent?.extractPendingUscisCaseId(): String? {
+    return this?.getStringExtra(EXTRA_USCIS_CASE_ID)?.takeIf { it.isNotBlank() }
 }

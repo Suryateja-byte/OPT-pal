@@ -76,4 +76,48 @@ object AnalyticsLogger {
             }
         }
     }
+
+    fun logTravelAdvisorOpened() {
+        withAnalytics {
+            logEvent("travel_advisor_opened") {}
+        }
+    }
+
+    fun logTravelAssessmentRun() {
+        withAnalytics {
+            logEvent("travel_assessment_run") {}
+        }
+    }
+
+    fun logTravelAssessmentOutcome(outcome: String) {
+        withAnalytics {
+            logEvent("travel_assessment_outcome") {
+                param("outcome", outcome)
+            }
+        }
+    }
+
+    fun logTravelRuleBlocked(ruleId: String) {
+        withAnalytics {
+            logEvent("travel_rule_blocked") {
+                param("rule_id", ruleId)
+            }
+        }
+    }
+
+    fun logTravelSourceOpened(sourceId: String) {
+        withAnalytics {
+            logEvent("travel_source_opened") {
+                param("source_id", sourceId)
+            }
+        }
+    }
+
+    fun logTravelEntitlementBlocked(source: String) {
+        withAnalytics {
+            logEvent("travel_entitlement_blocked") {
+                param("source", source)
+            }
+        }
+    }
 }

@@ -34,7 +34,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,6 +55,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sidekick.opt_pal.core.analytics.AnalyticsLogger
 import com.sidekick.opt_pal.data.model.ReportingObligation
 import com.sidekick.opt_pal.data.model.ReportingSource
+import com.sidekick.opt_pal.data.model.ReportingWizardEventType
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -63,6 +66,14 @@ private fun Long.toDateDisplay(): String {
     val formatter = SimpleDateFormat("MMM d", Locale.US)
     formatter.timeZone = TimeZone.getTimeZone("UTC")
     return formatter.format(Date(this))
+}
+
+private fun ReportingWizardEventType.toDisplayName(): String {
+    return when (this) {
+        ReportingWizardEventType.NEW_EMPLOYER -> "New employer"
+        ReportingWizardEventType.EMPLOYMENT_ENDED -> "Employment ended"
+        ReportingWizardEventType.MATERIAL_CHANGE -> "Material change"
+    }
 }
 
 private fun daysUntil(timestamp: Long): Long {
@@ -76,6 +87,8 @@ fun ReportingRoute(
     onNavigateBack: () -> Unit,
     onAddManualTask: () -> Unit,
     onEditManualTask: (String) -> Unit,
+    onStartWizard: () -> Unit,
+    onContinueWizard: (String?, String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ReportingViewModel = viewModel(factory = ReportingViewModel.Factory)
 ) {
@@ -88,6 +101,8 @@ fun ReportingRoute(
         onNavigateBack = onNavigateBack,
         onAddManualTask = onAddManualTask,
         onEditManualTask = onEditManualTask,
+        onStartWizard = onStartWizard,
+        onContinueWizard = onContinueWizard,
         modifier = modifier
     )
 }
@@ -101,6 +116,8 @@ private fun ReportingScreen(
     onNavigateBack: () -> Unit,
     onAddManualTask: () -> Unit,
     onEditManualTask: (String) -> Unit,
+    onStartWizard: () -> Unit,
+    onContinueWizard: (String?, String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var isVisible by remember { mutableStateOf(false) }
@@ -187,18 +204,53 @@ private fun ReportingScreen(
                         visible = isVisible,
                         enter = fadeIn(tween(600, 100)) + slideInVertically(tween(600, 100)) { 40 }
                     ) {
-                        Text(
-                            text = "PENDING",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            letterSpacing = 2.sp
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(
+                                text = "ACTION NEEDED",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                letterSpacing = 2.sp,
+                                modifier = Modifier.testTag(com.sidekick.opt_pal.ui.UiTestTags.REPORTING_ACTION_SECTION)
+                            )
+                            TextButton(
+                                onClick = onStartWizard,
+                                modifier = Modifier.testTag(com.sidekick.opt_pal.ui.UiTestTags.REPORTING_START_WIZARD_BUTTON)
+                            ) {
+                                Text("Start reporting wizard")
+                            }
+                        }
+                    }
+                }
+
+                if (state.actionItems.isEmpty()) {
+                    item {
+                        MinimalEmptyState("No wizard actions right now.")
+                    }
+                } else {
+                    items(state.actionItems, key = { it.obligation.id }) { item ->
+                        WizardActionItem(
+                            item = item,
+                            onContinueWizard = { onContinueWizard(item.wizard?.id, item.obligation.id) },
+                            onMarkDone = { onToggleComplete(item.obligation) },
+                            onDelete = { onDelete(item.obligation) }
                         )
                     }
                 }
 
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "OTHER REMINDERS",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        letterSpacing = 2.sp,
+                        modifier = Modifier.testTag(com.sidekick.opt_pal.ui.UiTestTags.REPORTING_MANUAL_SECTION)
+                    )
+                }
+
                 if (state.pendingObligations.isEmpty()) {
                     item {
-                        MinimalEmptyState("All caught up.")
+                        MinimalEmptyState("No manual reminders right now.")
                     }
                 } else {
                     items(state.pendingObligations, key = { it.id }) { obligation ->
@@ -239,6 +291,58 @@ private fun ReportingScreen(
                 
                 item {
                      Spacer(modifier = Modifier.height(80.dp)) // Space for FAB
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WizardActionItem(
+    item: ReportingActionItem,
+    onContinueWizard: () -> Unit,
+    onMarkDone: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = item.obligation.description,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = item.wizard?.parsedEventType?.toDisplayName()
+                    ?: item.obligation.eventType.replace('_', ' ').lowercase()
+                        .replaceFirstChar { it.uppercase() },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "Due ${item.obligation.dueDate.toDateDisplay()}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(
+                    onClick = onContinueWizard,
+                    modifier = Modifier.testTag(com.sidekick.opt_pal.ui.UiTestTags.REPORTING_CONTINUE_WIZARD_BUTTON)
+                ) {
+                    Text("Continue wizard")
+                }
+                TextButton(onClick = onMarkDone) {
+                    Text("Mark done")
+                }
+                TextButton(onClick = onDelete) {
+                    Text("Delete")
                 }
             }
         }
@@ -367,5 +471,3 @@ private fun onEditHandler(
         null
     }
 }
-
-

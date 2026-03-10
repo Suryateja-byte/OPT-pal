@@ -22,6 +22,7 @@ class OnboardingDocumentSupportTest {
                 "sevis_id" to "N1234567890",
                 "school_name" to "State University",
                 "cip_code" to "11.0701",
+                "major_name" to "Computer Science",
                 "opt_type" to "STEM",
                 "opt_start_date" to "2025-06-01"
             )
@@ -32,6 +33,7 @@ class OnboardingDocumentSupportTest {
         assertEquals("N1234567890", candidate.fields.sevisId)
         assertEquals("State University", candidate.fields.schoolName)
         assertEquals("11.0701", candidate.fields.cipCode)
+        assertEquals("Computer Science", candidate.fields.majorName)
         assertEquals(OptType.STEM, candidate.fields.optType)
         assertEquals(date(2025, 6, 1), candidate.fields.optStartDate)
     }
@@ -69,6 +71,7 @@ class OnboardingDocumentSupportTest {
                     "sevis_id" to "N0000000001",
                     "school_name" to "Tech University",
                     "cip_code" to "14.0901",
+                    "major_name" to "Electrical Engineering",
                     "opt_type" to "Initial",
                     "opt_start_date" to "2025-02-01"
                 )
@@ -96,9 +99,11 @@ class OnboardingDocumentSupportTest {
         assertEquals("N0000000001", draft.sevisId)
         assertEquals("Tech University", draft.schoolName)
         assertEquals("14.0901", draft.cipCode)
+        assertEquals("Electrical Engineering", draft.majorName)
         assertEquals(listOf("i20-2", "ead-2"), draft.sourceDocumentIds)
         assertEquals("I-20", draft.fieldSources[OnboardingField.SEVIS_ID])
         assertEquals("EAD", draft.fieldSources[OnboardingField.OPT_START_DATE])
+        assertEquals("I-20", draft.fieldSources[OnboardingField.MAJOR_NAME])
     }
 
     @Test

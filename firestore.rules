@@ -5,6 +5,10 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == userId;
     }
 
+    function changedOnly(allowedKeys) {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly(allowedKeys);
+    }
+
     match /users/{userId} {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId);
@@ -14,10 +18,13 @@ service cloud.firestore {
           'email',
           'optType',
           'optStartDate',
+          'unemploymentTrackingStartDate',
           'optEndDate',
           'sevisId',
           'schoolName',
           'cipCode',
+          'majorName',
+          'firstUsStudentTaxYear',
           'onboardingSource',
           'onboardingDocumentIds',
           'onboardingConfirmedAt'
@@ -29,8 +36,100 @@ service cloud.firestore {
       allow read: if isOwner(userId);
       allow create: if false;
       allow update: if isOwner(userId) &&
-        request.resource.data.diff(resource.data).changedKeys().hasOnly(['userTag']);
+        changedOnly(['userTag']);
       allow delete: if isOwner(userId);
+    }
+
+    match /users/{userId}/employment/{employmentId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) &&
+        request.resource.data.keys().hasOnly([
+          'employerName',
+          'startDate',
+          'endDate',
+          'jobTitle',
+          'hoursPerWeek'
+        ]);
+      allow update: if isOwner(userId) &&
+        changedOnly([
+          'employerName',
+          'startDate',
+          'endDate',
+          'jobTitle',
+          'hoursPerWeek'
+        ]);
+      allow delete: if isOwner(userId);
+    }
+
+    match /users/{userId}/reporting/{obligationId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) &&
+        request.resource.data.keys().hasOnly([
+          'eventType',
+          'description',
+          'eventDate',
+          'dueDate',
+          'isCompleted',
+          'createdBy',
+          'wizardId',
+          'relatedEmploymentId',
+          'actionType',
+          'sourceEventType'
+        ]);
+      allow update: if isOwner(userId) &&
+        changedOnly([
+          'eventType',
+          'description',
+          'eventDate',
+          'dueDate',
+          'isCompleted',
+          'createdBy'
+        ]);
+      allow delete: if isOwner(userId);
+    }
+
+    match /users/{userId}/reportingWizards/{wizardId} {
+      allow read: if isOwner(userId);
+      allow create: if false;
+      allow update: if isOwner(userId) &&
+        changedOnly([
+          'status',
+          'userInputs',
+          'editedDraft',
+          'copiedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    match /users/{userId}/uscisCases/{caseId} {
+      allow read: if isOwner(userId);
+      allow create, update, delete: if false;
+    }
+
+    match /users/{userId}/ficaRefundCases/{caseId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) &&
+        request.resource.data.keys().hasOnly([
+          'w2DocumentId',
+          'taxYear',
+          'employerName',
+          'employerOutcome',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ]);
+      allow update: if isOwner(userId) &&
+        changedOnly([
+          'userInputs',
+          'employerOutcome',
+          'status',
+          'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    match /users/{userId}/caseTrackerDevices/{installationId} {
+      allow read, create, update, delete: if false;
     }
 
     match /scan_results/{userId}/{document=**} {
