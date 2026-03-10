@@ -1218,6 +1218,11 @@ export {
   prepareReportingWizard,
 } from "./reportingWizard";
 export {
+  publishApprovedPolicyAlertCandidate,
+  syncNotificationDevice,
+  syncPolicyAlertCandidates,
+} from "./policyAlerts";
+export {
   archiveUscisCase,
   getUscisTrackerAvailability,
   pollTrackedUscisCases,

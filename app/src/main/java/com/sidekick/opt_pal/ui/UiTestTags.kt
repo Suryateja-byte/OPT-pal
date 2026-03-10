@@ -33,6 +33,9 @@ object UiTestTags {
     const val DASHBOARD_USCIS_SUMMARY = "dashboard_uscis_summary"
     const val DASHBOARD_TAX_REFUND_CARD = "dashboard_tax_refund_card"
     const val DASHBOARD_TRAVEL_ADVISOR_CARD = "dashboard_travel_advisor_card"
+    const val DASHBOARD_POLICY_ALERTS_CARD = "dashboard_policy_alerts_card"
+    const val DASHBOARD_POLICY_ALERT_SUMMARY = "dashboard_policy_alert_summary"
+    const val DASHBOARD_COMPLIANCE_CARD = "dashboard_compliance_card"
 
     const val CASE_STATUS_RECEIPT_FIELD = "case_status_receipt_field"
     const val CASE_STATUS_ADD_BUTTON = "case_status_add_button"
@@ -93,4 +96,12 @@ object UiTestTags {
     const val TRAVEL_OUTCOME_CARD = "travel_outcome_card"
     const val TRAVEL_LOCKED_PREVIEW = "travel_locked_preview"
     const val TRAVEL_UPLOAD_MISSING_BUTTON = "travel_upload_missing_button"
+
+    const val POLICY_ALERT_FILTER_ROW = "policy_alert_filter_row"
+    const val POLICY_ALERT_FEED_LIST = "policy_alert_feed_list"
+    const val POLICY_ALERT_DETAIL = "policy_alert_detail"
+    const val POLICY_ALERT_NOTIFICATIONS_BUTTON = "policy_alert_notifications_button"
+
+    const val COMPLIANCE_HEALTH_SCREEN = "compliance_health_screen"
+    const val COMPLIANCE_HEALTH_FACTOR_LIST = "compliance_health_factor_list"
 }

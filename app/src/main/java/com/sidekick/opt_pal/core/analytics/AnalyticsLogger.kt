@@ -120,4 +120,48 @@ object AnalyticsLogger {
             }
         }
     }
+
+    fun logPolicyAlertFeedOpened() {
+        withAnalytics {
+            logEvent("policy_alert_feed_opened") {}
+        }
+    }
+
+    fun logPolicyAlertOpened(alertId: String) {
+        withAnalytics {
+            logEvent("policy_alert_opened") {
+                param("alert_id", alertId)
+            }
+        }
+    }
+
+    fun logPolicyAlertSourceOpened(alertId: String) {
+        withAnalytics {
+            logEvent("policy_alert_source_opened") {
+                param("alert_id", alertId)
+            }
+        }
+    }
+
+    fun logComplianceHealthOpened() {
+        withAnalytics {
+            logEvent("compliance_health_opened") {}
+        }
+    }
+
+    fun logComplianceHealthActionClicked(actionId: String) {
+        withAnalytics {
+            logEvent("compliance_health_action_clicked") {
+                param("action_id", actionId.take(80))
+            }
+        }
+    }
+
+    fun logComplianceHealthReferenceOpened(referenceId: String) {
+        withAnalytics {
+            logEvent("compliance_health_reference_opened") {
+                param("reference_id", referenceId.take(80))
+            }
+        }
+    }
 }

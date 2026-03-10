@@ -2,16 +2,22 @@ package com.sidekick.opt_pal.feature.dashboard
 
 import com.google.firebase.auth.FirebaseUser
 import com.sidekick.opt_pal.data.model.Employment
+import com.sidekick.opt_pal.data.model.PolicyAlertAvailability
+import com.sidekick.opt_pal.data.model.PolicyAlertCard
+import com.sidekick.opt_pal.data.model.PolicyAlertSource
 import com.sidekick.opt_pal.data.model.ReportingObligation
 import com.sidekick.opt_pal.data.model.UserProfile
 import com.sidekick.opt_pal.testing.fakes.FakeAuthRepository
 import com.sidekick.opt_pal.testing.fakes.FakeCaseStatusRepository
+import com.sidekick.opt_pal.testing.fakes.FakeComplianceHealthRepository
 import com.sidekick.opt_pal.testing.fakes.FakeDashboardRepository
 import com.sidekick.opt_pal.testing.fakes.FakeDocumentRepository
+import com.sidekick.opt_pal.testing.fakes.FakePolicyAlertRepository
 import com.sidekick.opt_pal.testing.fakes.FakeReportingRepository
 import com.sidekick.opt_pal.testing.rules.MainDispatcherRule
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -22,6 +28,7 @@ import org.junit.Test
 import java.time.LocalDate
 import java.time.ZoneOffset
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class DashboardViewModelTest {
 
     @get:Rule
@@ -36,14 +43,18 @@ class DashboardViewModelTest {
         val dashboardRepository = FakeDashboardRepository()
         val reportingRepository = FakeReportingRepository()
         val caseStatusRepository = FakeCaseStatusRepository()
+        val policyAlertRepository = FakePolicyAlertRepository()
         val documentRepository = FakeDocumentRepository()
+        val complianceHealthRepository = FakeComplianceHealthRepository()
         val now = date(2024, 1, 20)
         val viewModel = DashboardViewModel(
             authRepository,
             dashboardRepository,
             reportingRepository,
             caseStatusRepository,
-            documentRepository
+            policyAlertRepository,
+            documentRepository,
+            complianceHealthRepository
         ) { now }
 
         val firebaseUser = mockUser("user-1")
@@ -91,13 +102,17 @@ class DashboardViewModelTest {
         val dashboardRepository = FakeDashboardRepository()
         val reportingRepository = FakeReportingRepository()
         val caseStatusRepository = FakeCaseStatusRepository()
+        val policyAlertRepository = FakePolicyAlertRepository()
         val documentRepository = FakeDocumentRepository()
+        val complianceHealthRepository = FakeComplianceHealthRepository()
         val viewModel = DashboardViewModel(
             authRepository,
             dashboardRepository,
             reportingRepository,
             caseStatusRepository,
-            documentRepository
+            policyAlertRepository,
+            documentRepository,
+            complianceHealthRepository
         )
         val firebaseUser = mockUser("user-2")
         authRepository.emitUser(firebaseUser)
@@ -115,13 +130,17 @@ class DashboardViewModelTest {
         val dashboardRepository = FakeDashboardRepository()
         val reportingRepository = FakeReportingRepository()
         val caseStatusRepository = FakeCaseStatusRepository()
+        val policyAlertRepository = FakePolicyAlertRepository()
         val documentRepository = FakeDocumentRepository()
+        val complianceHealthRepository = FakeComplianceHealthRepository()
         val viewModel = DashboardViewModel(
             authRepository,
             dashboardRepository,
             reportingRepository,
             caseStatusRepository,
-            documentRepository
+            policyAlertRepository,
+            documentRepository,
+            complianceHealthRepository
         ) { date(2024, 2, 1) }
 
         val firebaseUser = mockUser("user-3")
@@ -157,13 +176,17 @@ class DashboardViewModelTest {
         val dashboardRepository = FakeDashboardRepository()
         val reportingRepository = FakeReportingRepository()
         val caseStatusRepository = FakeCaseStatusRepository()
+        val policyAlertRepository = FakePolicyAlertRepository()
         val documentRepository = FakeDocumentRepository()
+        val complianceHealthRepository = FakeComplianceHealthRepository()
         val viewModel = DashboardViewModel(
             authRepository,
             dashboardRepository,
             reportingRepository,
             caseStatusRepository,
-            documentRepository
+            policyAlertRepository,
+            documentRepository,
+            complianceHealthRepository
         ) { date(2025, 3, 1) }
 
         val firebaseUser = mockUser("user-4")
@@ -184,6 +207,118 @@ class DashboardViewModelTest {
         val state = viewModel.uiState.value
         assertEquals(com.sidekick.opt_pal.core.calculations.UnemploymentDataQualityState.NEEDS_STEM_CYCLE_START, state.dataQualityState)
         assertEquals("Add original OPT start date", state.unemploymentActionLabel)
+    }
+
+    @Test
+    fun disabledPolicyAlertFeedSuppressesDashboardHeadlineAndBadge() = runTest {
+        val authRepository = FakeAuthRepository()
+        val dashboardRepository = FakeDashboardRepository()
+        val reportingRepository = FakeReportingRepository()
+        val caseStatusRepository = FakeCaseStatusRepository()
+        val policyAlertRepository = FakePolicyAlertRepository()
+        val documentRepository = FakeDocumentRepository()
+        val complianceHealthRepository = FakeComplianceHealthRepository()
+        policyAlertRepository.availabilityResult = Result.success(
+            PolicyAlertAvailability(
+                isEnabled = false,
+                message = "Limited rollout"
+            )
+        )
+        policyAlertRepository.setAlerts(
+            listOf(
+                PolicyAlertCard(
+                    id = "critical-alert",
+                    title = "Critical travel change",
+                    whatChanged = "Travel guidance changed.",
+                    whoIsAffected = "OPT students.",
+                    whyItMatters = "Trips may be affected.",
+                    recommendedAction = "Review the source.",
+                    source = PolicyAlertSource(
+                        label = "DOS U.S. Visas News",
+                        url = "https://travel.state.gov/content/travel/en/News/visas-news.html",
+                        publishedAt = 1L
+                    ),
+                    severity = "critical",
+                    confidence = "high",
+                    finality = "guidance",
+                    topics = listOf("travel"),
+                    publishedAt = 2L
+                )
+            )
+        )
+        val viewModel = DashboardViewModel(
+            authRepository,
+            dashboardRepository,
+            reportingRepository,
+            caseStatusRepository,
+            policyAlertRepository,
+            documentRepository,
+            complianceHealthRepository
+        ) { date(2026, 3, 10) }
+
+        authRepository.emitUser(mockUser("user-5"))
+        authRepository.emitProfile(
+            "user-5",
+            UserProfile(uid = "user-5", email = "test@example.com", optType = "initial", optStartDate = date(2026, 1, 1))
+        )
+
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(0, state.policyAlertUnreadCount)
+        assertEquals(null, state.latestCriticalPolicyAlertTitle)
+    }
+
+    @Test
+    fun complianceScoreAppearsWhenFeatureEnabled() = runTest {
+        val authRepository = FakeAuthRepository()
+        val dashboardRepository = FakeDashboardRepository()
+        val reportingRepository = FakeReportingRepository()
+        val caseStatusRepository = FakeCaseStatusRepository()
+        val policyAlertRepository = FakePolicyAlertRepository()
+        val documentRepository = FakeDocumentRepository()
+        val complianceHealthRepository = FakeComplianceHealthRepository()
+        val now = date(2026, 3, 10)
+        val viewModel = DashboardViewModel(
+            authRepository,
+            dashboardRepository,
+            reportingRepository,
+            caseStatusRepository,
+            policyAlertRepository,
+            documentRepository,
+            complianceHealthRepository
+        ) { now }
+
+        authRepository.emitUser(mockUser("user-6"))
+        authRepository.emitProfile(
+            "user-6",
+            UserProfile(
+                uid = "user-6",
+                email = "stable@example.com",
+                optType = "initial",
+                optStartDate = date(2026, 1, 1),
+                unemploymentTrackingStartDate = date(2026, 1, 1),
+                optEndDate = date(2026, 12, 31)
+            )
+        )
+        dashboardRepository.setEmployments(
+            listOf(
+                Employment(
+                    id = "job-1",
+                    employerName = "Acme",
+                    jobTitle = "Engineer",
+                    startDate = date(2026, 1, 2),
+                    endDate = null,
+                    hoursPerWeek = 40
+                )
+            )
+        )
+
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.complianceScore != null)
+        assertTrue(complianceHealthRepository.syncRequests.isNotEmpty())
     }
 
     private fun mockUser(uid: String): FirebaseUser {

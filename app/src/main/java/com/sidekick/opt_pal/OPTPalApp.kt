@@ -38,10 +38,12 @@ import com.sidekick.opt_pal.di.AppModule
 import com.sidekick.opt_pal.feature.auth.LoginRoute
 import com.sidekick.opt_pal.feature.auth.RegisterRoute
 import com.sidekick.opt_pal.feature.casestatus.UscisCaseStatusRoute
+import com.sidekick.opt_pal.feature.compliance.ComplianceHealthRoute
 import com.sidekick.opt_pal.feature.dashboard.DashboardRoute
 import com.sidekick.opt_pal.feature.employment.AddEmploymentRoute
 import com.sidekick.opt_pal.feature.feedback.FeedbackRoute
 import com.sidekick.opt_pal.feature.legal.LegalRoute
+import com.sidekick.opt_pal.feature.policy.PolicyAlertFeedRoute
 import com.sidekick.opt_pal.feature.reporting.ManageReportingRoute
 import com.sidekick.opt_pal.feature.reporting.ReportingRoute
 import com.sidekick.opt_pal.feature.reporting.ReportingWizardRoute
@@ -59,6 +61,8 @@ fun OPTPalApp(
     securitySessionManager: SecuritySessionManager,
     pendingUscisCaseId: String? = null,
     onPendingUscisCaseHandled: () -> Unit = {},
+    pendingPolicyAlertId: String? = null,
+    onPendingPolicyAlertHandled: () -> Unit = {},
     navController: NavHostController = rememberNavController()
 ) {
     val sessionState by sessionViewModel.uiState.collectAsStateWithLifecycle()
@@ -111,6 +115,24 @@ fun OPTPalApp(
         }
     }
 
+    LaunchedEffect(
+        sessionState.isLoggedIn,
+        sessionState.isProfileComplete,
+        sessionState.isCheckingAuth,
+        pendingPolicyAlertId
+    ) {
+        if (!sessionState.isCheckingAuth &&
+            sessionState.isLoggedIn &&
+            sessionState.isProfileComplete &&
+            !pendingPolicyAlertId.isNullOrBlank()
+        ) {
+            navController.navigate(AppScreen.PolicyAlerts.createRoute(pendingPolicyAlertId)) {
+                launchSingleTop = true
+            }
+            onPendingPolicyAlertHandled()
+        }
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
@@ -145,7 +167,9 @@ fun OPTPalApp(
                         onAddEmployment = { navController.navigate(AppScreen.AddEmployment.route) },
                         onEditEmployment = { navController.navigate(AppScreen.EditEmployment.createRoute(it)) },
                         onOpenTaxRefund = { navController.navigate(AppScreen.TaxRefund.route) },
+                        onOpenComplianceScore = { navController.navigate(AppScreen.ComplianceScore.route) },
                         onOpenTravelAdvisor = { navController.navigate(AppScreen.TravelAdvisor.route) },
+                        onOpenPolicyAlerts = { navController.navigate(AppScreen.PolicyAlerts.createRoute()) },
                         onOpenCaseStatus = { navController.navigate(AppScreen.CaseStatus.createRoute()) },
                         onOpenReporting = { navController.navigate(AppScreen.Reporting.route) },
                         onOpenVault = { navController.navigate(AppScreen.DocumentVault.route) },
@@ -178,10 +202,32 @@ fun OPTPalApp(
                         }
                     )
                 }
+                composable(AppScreen.ComplianceScore.route) {
+                    ComplianceHealthRoute(
+                        onNavigateBack = { navController.popBackStack() },
+                        onNavigateToRoute = { route -> navController.navigate(route) }
+                    )
+                }
                 composable(AppScreen.TravelAdvisor.route) {
                     TravelAdvisorRoute(
                         onNavigateBack = { navController.popBackStack() },
                         onUploadMissingDocument = { navController.navigate(AppScreen.DocumentSelection.route) }
+                    )
+                }
+                composable(
+                    AppScreen.PolicyAlerts.route,
+                    arguments = listOf(
+                        navArgument(AppScreen.PolicyAlerts.ALERT_ID_ARG) {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) { backStackEntry ->
+                    PolicyAlertFeedRoute(
+                        selectedAlertId = backStackEntry.arguments?.getString(AppScreen.PolicyAlerts.ALERT_ID_ARG),
+                        onNavigateBack = { navController.popBackStack() },
+                        onOpenTravelAdvisor = { navController.navigate(AppScreen.TravelAdvisor.route) }
                     )
                 }
                 composable(AppScreen.AddEmployment.route) {

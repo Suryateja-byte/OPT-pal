@@ -9,8 +9,17 @@ import com.sidekick.opt_pal.core.calculations.UnemploymentDataQualityState
 import com.sidekick.opt_pal.core.calculations.allowedUnemploymentDays
 import com.sidekick.opt_pal.core.calculations.calculateUnemploymentForecast
 import com.sidekick.opt_pal.core.calculations.utcStartOfDay
+import com.sidekick.opt_pal.core.compliance.ComplianceScoreEngine
+import com.sidekick.opt_pal.core.compliance.buildComplianceEvidenceSnapshot
 import com.sidekick.opt_pal.core.unemployment.UnemploymentAlertCoordinator
+import com.sidekick.opt_pal.data.model.ComplianceHealthAvailability
+import com.sidekick.opt_pal.data.model.ComplianceHealthScore
+import com.sidekick.opt_pal.data.model.DocumentMetadata
 import com.sidekick.opt_pal.data.model.Employment
+import com.sidekick.opt_pal.data.model.PolicyAlertAvailability
+import com.sidekick.opt_pal.data.model.PolicyAlertCard
+import com.sidekick.opt_pal.data.model.PolicyAlertSeverity
+import com.sidekick.opt_pal.data.model.PolicyAlertState
 import com.sidekick.opt_pal.data.model.ReportingObligation
 import com.sidekick.opt_pal.data.model.UscisCaseStage
 import com.sidekick.opt_pal.data.model.UscisCaseSummary
@@ -18,7 +27,9 @@ import com.sidekick.opt_pal.data.model.UscisCaseTracker
 import com.sidekick.opt_pal.data.model.UserProfile
 import com.sidekick.opt_pal.data.repository.AuthRepository
 import com.sidekick.opt_pal.data.repository.CaseStatusRepository
+import com.sidekick.opt_pal.data.repository.ComplianceHealthRepository
 import com.sidekick.opt_pal.data.repository.DashboardRepository
+import com.sidekick.opt_pal.data.repository.PolicyAlertRepository
 import com.sidekick.opt_pal.data.repository.ReportingRepository
 import com.sidekick.opt_pal.di.AppModule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -39,12 +50,17 @@ class DashboardViewModel(
     private val dashboardRepository: DashboardRepository,
     private val reportingRepository: ReportingRepository,
     private val caseStatusRepository: CaseStatusRepository,
+    private val policyAlertRepository: PolicyAlertRepository,
     private val documentRepository: com.sidekick.opt_pal.data.repository.DocumentRepository,
+    private val complianceHealthRepository: ComplianceHealthRepository,
     private val unemploymentAlertCoordinator: UnemploymentAlertCoordinator? = null,
     private val timeProvider: () -> Long = { System.currentTimeMillis() }
 ) : ViewModel() {
 
     private val currentUid = MutableStateFlow<String?>(null)
+    private val policyAlertAvailability = MutableStateFlow(PolicyAlertAvailability())
+    private val complianceAvailability = MutableStateFlow(ComplianceHealthAvailability())
+    private val complianceScoreEngine = ComplianceScoreEngine(timeProvider)
 
     val uiState: StateFlow<DashboardUiState> = authRepository.getAuthState()
         .flatMapLatest { user ->
@@ -52,13 +68,94 @@ class DashboardViewModel(
             if (user == null) {
                 flowOf(DashboardUiState(isLoading = false))
             } else {
-                combine(
+                viewModelScope.launch {
+                    policyAlertAvailability.value = policyAlertRepository.resolveAvailability()
+                        .getOrElse {
+                            PolicyAlertAvailability(
+                                isEnabled = false,
+                                message = it.message ?: "Policy Alert Feed is unavailable."
+                            )
+                        }
+                }
+                viewModelScope.launch {
+                    complianceAvailability.value = complianceHealthRepository.resolveAvailability()
+                        .getOrElse {
+                            ComplianceHealthAvailability(
+                                isEnabled = false,
+                                message = it.message ?: "Compliance Health Score is unavailable."
+                            )
+                        }
+                }
+                val dashboardCoreDependencies = combine(
                     authRepository.getUserProfile(user.uid),
                     dashboardRepository.getEmployments(user.uid),
                     reportingRepository.getReportingObligations(user.uid),
-                    caseStatusRepository.observeTrackedCases(user.uid)
-                ) { profile, employments, reporting, trackedCases ->
-                    buildDashboardState(profile, employments, reporting, trackedCases, timeProvider())
+                    caseStatusRepository.observeTrackedCases(user.uid),
+                    documentRepository.getDocuments(user.uid)
+                ) { profile, employments, reporting, trackedCases, documents ->
+                    DashboardCoreDependencies(
+                        profile = profile,
+                        employment = employments,
+                        reporting = reporting,
+                        trackedCases = trackedCases,
+                        documents = documents
+                    )
+                }
+                val dashboardDependencies = combine(
+                    dashboardCoreDependencies,
+                    policyAlertRepository.observePublishedAlerts()
+                ) { core, policyAlerts ->
+                    DashboardDependencies(
+                        profile = core.profile,
+                        employment = core.employment,
+                        reporting = core.reporting,
+                        trackedCases = core.trackedCases,
+                        documents = core.documents,
+                        policyAlerts = policyAlerts
+                    )
+                }
+                combine(
+                    dashboardDependencies,
+                    policyAlertAvailability,
+                    complianceAvailability,
+                    policyAlertRepository.observeAlertStates(user.uid)
+                ) { dependencies, alertAvailability, complianceHealthAvailability, policyStates ->
+                    val now = timeProvider()
+                    val complianceScore = if (complianceHealthAvailability.isEnabled) {
+                        val evidence = buildComplianceEvidenceSnapshot(
+                            profile = dependencies.profile,
+                            employments = dependencies.employment,
+                            reportingObligations = dependencies.reporting,
+                            documents = dependencies.documents,
+                            trackedCases = dependencies.trackedCases,
+                            policyAlerts = dependencies.policyAlerts,
+                            policyStates = policyStates,
+                            now = now
+                        )
+                        val baseScore = complianceScoreEngine.score(
+                            evidence = evidence,
+                            now = now
+                        )
+                        val snapshotState = complianceHealthRepository.syncSnapshot(
+                            uid = user.uid,
+                            score = baseScore.score,
+                            computedAt = baseScore.computedAt
+                        )
+                        baseScore.copy(delta = snapshotState.delta)
+                    } else {
+                        null
+                    }
+                    buildDashboardState(
+                        profile = dependencies.profile,
+                        employment = dependencies.employment,
+                        reporting = dependencies.reporting,
+                        trackedCases = dependencies.trackedCases,
+                        policyAlerts = dependencies.policyAlerts,
+                        policyAlertAvailability = alertAvailability,
+                        policyStates = policyStates,
+                        complianceScore = complianceScore,
+                        now = now
+                    )
                 }.onStart { emit(DashboardUiState(isLoading = true)) }
             }
         }
@@ -106,7 +203,9 @@ class DashboardViewModel(
                     AppModule.dashboardRepository,
                     AppModule.reportingRepository,
                     AppModule.caseStatusRepository,
+                    AppModule.policyAlertRepository,
                     AppModule.documentRepository,
+                    AppModule.complianceHealthRepository,
                     AppModule.unemploymentAlertCoordinator
                 )
             }
@@ -114,11 +213,32 @@ class DashboardViewModel(
     }
 }
 
+private data class DashboardCoreDependencies(
+    val profile: UserProfile?,
+    val employment: List<Employment>,
+    val reporting: List<ReportingObligation>,
+    val trackedCases: List<UscisCaseTracker>,
+    val documents: List<DocumentMetadata>
+)
+
+private data class DashboardDependencies(
+    val profile: UserProfile?,
+    val employment: List<Employment>,
+    val reporting: List<ReportingObligation>,
+    val trackedCases: List<UscisCaseTracker>,
+    val documents: List<DocumentMetadata>,
+    val policyAlerts: List<PolicyAlertCard>
+)
+
 private fun buildDashboardState(
     profile: UserProfile?,
     employment: List<Employment>,
     reporting: List<ReportingObligation>,
     trackedCases: List<UscisCaseTracker>,
+    policyAlerts: List<PolicyAlertCard>,
+    policyAlertAvailability: PolicyAlertAvailability,
+    policyStates: List<PolicyAlertState>,
+    complianceScore: ComplianceHealthScore?,
     now: Long
 ): DashboardUiState {
     val sortedHistory = employment.sortedByDescending { it.startDate }
@@ -137,6 +257,23 @@ private fun buildDashboardState(
         .filterNot { it.isArchived }
         .firstOrNull()
         ?.toSummary(now)
+    val visiblePolicyAlerts = policyAlerts.filter { alert ->
+        when (alert.audience.lowercase()) {
+            "initial_opt" -> profile?.optType?.lowercase() != "stem"
+            "stem_opt" -> profile?.optType?.lowercase() == "stem"
+            else -> true
+        }
+    }
+    val latestCriticalPolicyAlert = visiblePolicyAlerts
+        .filter { !it.isArchived && !it.isSuperseded && it.parsedSeverity == PolicyAlertSeverity.CRITICAL }
+        .maxByOrNull { it.publishedAt }
+    val unreadPolicyCount = if (policyAlertAvailability.isEnabled) {
+        visiblePolicyAlerts.count { alert ->
+            policyStates.none { it.alertId == alert.id && it.openedAt != null }
+        }
+    } else {
+        0
+    }
     val counterActionLabel = when (forecast.dataQualityState) {
         UnemploymentDataQualityState.NEEDS_HOURS_REVIEW -> "Review employment hours"
         UnemploymentDataQualityState.NEEDS_STEM_CYCLE_START -> "Add original OPT start date"
@@ -165,7 +302,11 @@ private fun buildDashboardState(
         firstEmploymentMissingHoursId = firstMissingHoursEmploymentId,
         isEstimate = forecast.isEstimate,
         unemploymentTrackingStartDate = profile?.unemploymentTrackingStartDate,
-        uscisCaseSummary = uscisSummary
+        uscisCaseSummary = uscisSummary,
+        complianceScore = complianceScore,
+        policyAlertUnreadCount = unreadPolicyCount,
+        latestCriticalPolicyAlertTitle = latestCriticalPolicyAlert?.title.takeIf { policyAlertAvailability.isEnabled },
+        latestCriticalPolicyAlertId = latestCriticalPolicyAlert?.id.takeIf { policyAlertAvailability.isEnabled }
     )
 }
 
@@ -252,6 +393,10 @@ data class DashboardUiState(
     val isEstimate: Boolean = false,
     val unemploymentTrackingStartDate: Long? = null,
     val uscisCaseSummary: UscisCaseSummary? = null,
+    val complianceScore: ComplianceHealthScore? = null,
+    val policyAlertUnreadCount: Int = 0,
+    val latestCriticalPolicyAlertTitle: String? = null,
+    val latestCriticalPolicyAlertId: String? = null,
     val pendingReportingCount: Int = 0,
     val nextReportingDue: Long? = null
 ) {

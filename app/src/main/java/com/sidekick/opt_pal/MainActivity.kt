@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.sidekick.opt_pal.core.casestatus.EXTRA_USCIS_CASE_ID
+import com.sidekick.opt_pal.core.policy.EXTRA_POLICY_ALERT_ID
 import com.sidekick.opt_pal.core.session.SessionViewModel
 import com.sidekick.opt_pal.di.AppModule
 import com.sidekick.opt_pal.ui.theme.OPTPalTheme
@@ -17,10 +18,12 @@ class MainActivity : ComponentActivity() {
 
     private val sessionViewModel: SessionViewModel by viewModels { SessionViewModel.Factory }
     private var pendingUscisCaseId by mutableStateOf<String?>(null)
+    private var pendingPolicyAlertId by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         pendingUscisCaseId = intent.extractPendingUscisCaseId()
+        pendingPolicyAlertId = intent.extractPendingPolicyAlertId()
         enableEdgeToEdge()
         setContent {
             OPTPalTheme {
@@ -28,7 +31,9 @@ class MainActivity : ComponentActivity() {
                     sessionViewModel = sessionViewModel,
                     securitySessionManager = AppModule.securitySessionManager,
                     pendingUscisCaseId = pendingUscisCaseId,
-                    onPendingUscisCaseHandled = { pendingUscisCaseId = null }
+                    onPendingUscisCaseHandled = { pendingUscisCaseId = null },
+                    pendingPolicyAlertId = pendingPolicyAlertId,
+                    onPendingPolicyAlertHandled = { pendingPolicyAlertId = null }
                 )
             }
         }
@@ -38,6 +43,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         pendingUscisCaseId = intent.extractPendingUscisCaseId()
+        pendingPolicyAlertId = intent.extractPendingPolicyAlertId()
     }
 
     override fun onResume() {
@@ -58,4 +64,8 @@ class MainActivity : ComponentActivity() {
 
 private fun android.content.Intent?.extractPendingUscisCaseId(): String? {
     return this?.getStringExtra(EXTRA_USCIS_CASE_ID)?.takeIf { it.isNotBlank() }
+}
+
+private fun android.content.Intent?.extractPendingPolicyAlertId(): String? {
+    return this?.getStringExtra(EXTRA_POLICY_ALERT_ID)?.takeIf { it.isNotBlank() }
 }

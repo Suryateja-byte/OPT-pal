@@ -25,6 +25,7 @@ class OPTPalApplication : Application() {
         Firebase.crashlytics.setCrashlyticsCollectionEnabled(!isDebuggable)
         AppModule.unemploymentAlertScheduler.initialize()
         AppModule.uscisCaseNotificationManager.initialize()
+        AppModule.policyAlertNotificationManager.initialize()
         
         // Initialize secure vault & AI dependencies
         val geminiApiKey = BuildConfig.GEMINI_API_KEY

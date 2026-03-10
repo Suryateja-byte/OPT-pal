@@ -106,6 +106,23 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /users/{userId}/policyAlertState/{alertId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) &&
+        request.resource.data.keys().hasOnly([
+          'alertId',
+          'openedAt',
+          'lastSeenAt'
+        ]);
+      allow update: if isOwner(userId) &&
+        changedOnly([
+          'alertId',
+          'openedAt',
+          'lastSeenAt'
+        ]);
+      allow delete: if false;
+    }
+
     match /users/{userId}/ficaRefundCases/{caseId} {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId) &&
@@ -128,7 +145,16 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    match /users/{userId}/caseTrackerDevices/{installationId} {
+    match /users/{userId}/notificationDevices/{installationId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /policyAlerts/{alertId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if false;
+    }
+
+    match /policyAlertCandidates/{candidateId} {
       allow read, create, update, delete: if false;
     }
 

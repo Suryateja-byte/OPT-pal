@@ -3,7 +3,11 @@ package com.sidekick.opt_pal.testing.fakes
 import android.content.ContentResolver
 import android.net.Uri
 import com.google.firebase.auth.FirebaseUser
+import com.sidekick.opt_pal.core.calculations.utcStartOfDay
 import com.sidekick.opt_pal.core.session.UserSessionProvider
+import com.sidekick.opt_pal.data.model.ComplianceHealthAvailability
+import com.sidekick.opt_pal.data.model.ComplianceScoreSnapshot
+import com.sidekick.opt_pal.data.model.ComplianceScoreSnapshotState
 import com.sidekick.opt_pal.data.model.CompleteSetupRequest
 import com.sidekick.opt_pal.data.model.DocumentCategory
 import com.sidekick.opt_pal.data.model.DocumentProcessingMode
@@ -17,6 +21,9 @@ import com.sidekick.opt_pal.data.model.FicaEligibilityResult
 import com.sidekick.opt_pal.data.model.FicaRefundCase
 import com.sidekick.opt_pal.data.model.FicaRefundPacket
 import com.sidekick.opt_pal.data.model.FicaUserTaxInputs
+import com.sidekick.opt_pal.data.model.PolicyAlertAvailability
+import com.sidekick.opt_pal.data.model.PolicyAlertCard
+import com.sidekick.opt_pal.data.model.PolicyAlertState
 import com.sidekick.opt_pal.data.model.ReportingDraftResult
 import com.sidekick.opt_pal.data.model.ReportingObligation
 import com.sidekick.opt_pal.data.model.ReportingWizard
@@ -33,9 +40,13 @@ import com.sidekick.opt_pal.data.model.UserProfile
 import com.sidekick.opt_pal.data.model.W2ExtractionDraft
 import com.sidekick.opt_pal.data.repository.AuthRepository
 import com.sidekick.opt_pal.data.repository.CaseStatusRepository
+import com.sidekick.opt_pal.data.repository.ComplianceHealthRepository
 import com.sidekick.opt_pal.data.repository.DashboardRepository
 import com.sidekick.opt_pal.data.repository.DocumentRepository
 import com.sidekick.opt_pal.data.repository.FicaRefundRepository
+import com.sidekick.opt_pal.data.repository.NotificationDeviceChannels
+import com.sidekick.opt_pal.data.repository.NotificationDeviceRepository
+import com.sidekick.opt_pal.data.repository.PolicyAlertRepository
 import com.sidekick.opt_pal.data.repository.ReportingRepository
 import com.sidekick.opt_pal.data.repository.TravelAdvisorRepository
 import kotlinx.coroutines.CompletableDeferred
@@ -144,6 +155,38 @@ class FakeDashboardRepository : DashboardRepository {
 
     fun setEmployments(items: List<Employment>) {
         employments.value = items
+    }
+}
+
+class FakeComplianceHealthRepository : ComplianceHealthRepository {
+    var availabilityResult: Result<ComplianceHealthAvailability> = Result.success(
+        ComplianceHealthAvailability(
+            isEnabled = true,
+            message = "Enabled for tests."
+        )
+    )
+    val syncRequests = mutableListOf<Triple<String, Int, Long>>()
+    private val currentSnapshots = mutableMapOf<String, ComplianceScoreSnapshot>()
+    private val previousSnapshots = mutableMapOf<String, ComplianceScoreSnapshot>()
+
+    override suspend fun resolveAvailability(): Result<ComplianceHealthAvailability> = availabilityResult
+
+    override fun syncSnapshot(uid: String, score: Int, computedAt: Long): ComplianceScoreSnapshotState {
+        syncRequests += Triple(uid, score, computedAt)
+        val current = currentSnapshots[uid]
+        val previous = previousSnapshots[uid]
+        val nextCurrent = ComplianceScoreSnapshot(score = score, computedAt = computedAt)
+        return if (current == null) {
+            currentSnapshots[uid] = nextCurrent
+            ComplianceScoreSnapshotState(current = nextCurrent, previous = null)
+        } else if (utcStartOfDay(current.computedAt) == utcStartOfDay(computedAt)) {
+            currentSnapshots[uid] = nextCurrent
+            ComplianceScoreSnapshotState(current = nextCurrent, previous = previous)
+        } else {
+            previousSnapshots[uid] = current
+            currentSnapshots[uid] = nextCurrent
+            ComplianceScoreSnapshotState(current = nextCurrent, previous = current)
+        }
     }
 }
 
@@ -410,6 +453,38 @@ class FakeCaseStatusRepository : CaseStatusRepository {
     }
 }
 
+class FakeNotificationDeviceRepository : NotificationDeviceRepository {
+    var caseStatusEnabled: Boolean = false
+    var policyAlertsEnabled: Boolean = false
+    val syncRequests = mutableListOf<Triple<Boolean?, Boolean?, String?>>()
+    val tokenRefreshes = mutableListOf<String>()
+
+    override suspend fun handleTokenRefresh(token: String): Result<Unit> {
+        tokenRefreshes += token
+        return Result.success(Unit)
+    }
+
+    override suspend fun syncChannels(
+        caseStatusEnabled: Boolean?,
+        policyAlertsEnabled: Boolean?,
+        tokenOverride: String?
+    ): Result<NotificationDeviceChannels> {
+        syncRequests += Triple(caseStatusEnabled, policyAlertsEnabled, tokenOverride)
+        caseStatusEnabled?.let { this.caseStatusEnabled = it }
+        policyAlertsEnabled?.let { this.policyAlertsEnabled = it }
+        return Result.success(
+            NotificationDeviceChannels(
+                caseStatusEnabled = this.caseStatusEnabled,
+                policyAlertsEnabled = this.policyAlertsEnabled
+            )
+        )
+    }
+
+    override fun isCaseStatusEnabled(): Boolean = caseStatusEnabled
+
+    override fun isPolicyAlertsEnabled(): Boolean = policyAlertsEnabled
+}
+
 class FakeTravelAdvisorRepository : TravelAdvisorRepository {
     var entitlementResult: Result<TravelEntitlementState> = Result.success(
         TravelEntitlementState(
@@ -429,6 +504,57 @@ class FakeTravelAdvisorRepository : TravelAdvisorRepository {
 
     override suspend fun refreshPolicyBundle(): Result<TravelPolicyBundle> {
         return refreshResult
+    }
+}
+
+class FakePolicyAlertRepository : PolicyAlertRepository {
+    private val alerts = MutableStateFlow<List<PolicyAlertCard>>(emptyList())
+    private val states = mutableMapOf<String, MutableStateFlow<List<PolicyAlertState>>>()
+    var availabilityResult: Result<PolicyAlertAvailability> = Result.success(
+        PolicyAlertAvailability(
+            isEnabled = true,
+            message = "Enabled for tests."
+        )
+    )
+    var notificationsEnabled: Boolean = false
+    val openedAlertIds = mutableListOf<Pair<String, String>>()
+    val syncRequests = mutableListOf<Pair<Boolean, String?>>()
+
+    override suspend fun resolveAvailability(): Result<PolicyAlertAvailability> = availabilityResult
+
+    override fun observePublishedAlerts() = alerts
+
+    override fun observeAlertStates(uid: String) =
+        states.getOrPut(uid) { MutableStateFlow(emptyList()) }
+
+    override suspend fun markAlertOpened(uid: String, alertId: String): Result<Unit> {
+        openedAlertIds += uid to alertId
+        val current = states.getOrPut(uid) { MutableStateFlow(emptyList()) }.value.toMutableList()
+        val next = PolicyAlertState(id = alertId, alertId = alertId, openedAt = 1L, lastSeenAt = 1L)
+        val index = current.indexOfFirst { it.alertId == alertId }
+        if (index >= 0) {
+            current[index] = next
+        } else {
+            current += next
+        }
+        states.getOrPut(uid) { MutableStateFlow(emptyList()) }.value = current
+        return Result.success(Unit)
+    }
+
+    override suspend fun syncNotificationPreference(enabled: Boolean, tokenOverride: String?): Result<Unit> {
+        notificationsEnabled = enabled
+        syncRequests += enabled to tokenOverride
+        return Result.success(Unit)
+    }
+
+    override fun isNotificationPreferenceEnabled(): Boolean = notificationsEnabled
+
+    fun setAlerts(items: List<PolicyAlertCard>) {
+        alerts.value = items
+    }
+
+    fun setStates(uid: String, items: List<PolicyAlertState>) {
+        states.getOrPut(uid) { MutableStateFlow(emptyList()) }.value = items
     }
 }
 

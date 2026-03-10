@@ -6,7 +6,19 @@ sealed class AppScreen(val route: String) {
     data object Setup : AppScreen("setup")
     data object Dashboard : AppScreen("dashboard")
     data object TaxRefund : AppScreen("taxRefund")
+    data object ComplianceScore : AppScreen("complianceScore")
     data object TravelAdvisor : AppScreen("travelAdvisor")
+    data object PolicyAlerts : AppScreen("policyAlerts?alertId={alertId}") {
+        const val ALERT_ID_ARG = "alertId"
+
+        fun createRoute(alertId: String? = null): String {
+            return if (alertId.isNullOrBlank()) {
+                "policyAlerts"
+            } else {
+                "policyAlerts?alertId=$alertId"
+            }
+        }
+    }
     data object CaseStatus : AppScreen("caseStatus?caseId={caseId}") {
         const val CASE_ID_ARG = "caseId"
 

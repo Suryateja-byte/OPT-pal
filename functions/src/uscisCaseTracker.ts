@@ -93,11 +93,13 @@ type UscisCaseTrackerRecord = {
   isArchived: boolean;
 };
 
-type DeviceEndpointRecord = {
+type NotificationDeviceRecord = {
   installationId: string;
   token: string;
   platform: string;
   enabled: boolean;
+  caseStatusEnabled: boolean;
+  policyAlertsEnabled: boolean;
   createdAt: number;
   updatedAt: number;
 };
@@ -254,23 +256,37 @@ export const syncUscisCaseTrackerDevice = onCall(
     const installationId = asNonEmptyString(request.data.installationId, "installationId");
     const enabled = request.data.enabled !== false;
     const token = asOptionalString(request.data.token);
-    const endpointRef = deviceEndpointRef(userId, installationId);
+    const endpointRef = notificationDeviceRef(userId, installationId);
+    const current = await endpointRef.get();
+    const existing = toNotificationDeviceRecord(current.data());
     if (!enabled || !token) {
-      await endpointRef.delete().catch(() => undefined);
+      if (!existing?.policyAlertsEnabled) {
+        await endpointRef.delete().catch(() => undefined);
+        return {enabled: false};
+      }
+      await endpointRef.set(
+        {
+          caseStatusEnabled: false,
+          enabled: existing.policyAlertsEnabled,
+          updatedAt: Date.now(),
+        },
+        {merge: true}
+      );
       return {enabled: false};
     }
 
     const now = Date.now();
-    const current = await endpointRef.get();
-    const payload: DeviceEndpointRecord = {
+    const payload: NotificationDeviceRecord = {
       installationId,
       token,
       platform: DEVICE_PLATFORM,
       enabled: true,
-      createdAt: existingNumber(current.data()?.createdAt) ?? now,
+      caseStatusEnabled: true,
+      policyAlertsEnabled: existing?.policyAlertsEnabled ?? false,
+      createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };
-    await endpointRef.set(payload);
+    await endpointRef.set(payload, {merge: true});
     return {enabled: true};
   }
 );
@@ -564,11 +580,11 @@ async function sendStatusChangedNotifications(
   tracker: UscisCaseTrackerRecord
 ): Promise<void> {
   const snapshot = await deviceEndpointCollection(userId)
-    .where("enabled", "==", true)
+    .where("caseStatusEnabled", "==", true)
     .get();
 
   for (const doc of snapshot.docs) {
-    const endpoint = toDeviceEndpointRecord(doc.data());
+    const endpoint = toNotificationDeviceRecord(doc.data());
     if (!endpoint?.token) {
       continue;
     }
@@ -850,10 +866,10 @@ function trackerDocRef(userId: string, receiptNumber: string) {
 }
 
 function deviceEndpointCollection(userId: string) {
-  return firestore.collection("users").doc(userId).collection("caseTrackerDevices");
+  return firestore.collection("users").doc(userId).collection("notificationDevices");
 }
 
-function deviceEndpointRef(userId: string, installationId: string) {
+function notificationDeviceRef(userId: string, installationId: string) {
   return deviceEndpointCollection(userId).doc(installationId);
 }
 
@@ -885,7 +901,7 @@ function toTrackerRecord(value: unknown): UscisCaseTrackerRecord | null {
   };
 }
 
-function toDeviceEndpointRecord(value: unknown): DeviceEndpointRecord | null {
+function toNotificationDeviceRecord(value: unknown): NotificationDeviceRecord | null {
   const record = toRecord(value);
   const installationId = asOptionalString(record.installationId);
   const token = asOptionalString(record.token);
@@ -897,6 +913,8 @@ function toDeviceEndpointRecord(value: unknown): DeviceEndpointRecord | null {
     token,
     platform: asOptionalString(record.platform) || DEVICE_PLATFORM,
     enabled: record.enabled !== false,
+    caseStatusEnabled: record.caseStatusEnabled !== false,
+    policyAlertsEnabled: Boolean(record.policyAlertsEnabled),
     createdAt: existingNumber(record.createdAt) || 0,
     updatedAt: existingNumber(record.updatedAt) || 0,
   };

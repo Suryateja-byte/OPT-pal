@@ -40,8 +40,10 @@ import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.FlightTakeoff
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RequestQuote
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -49,6 +51,7 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -81,6 +84,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sidekick.opt_pal.core.analytics.AnalyticsLogger
 import com.sidekick.opt_pal.core.calculations.UnemploymentDataQualityState
+import com.sidekick.opt_pal.data.model.ComplianceHealthScore
+import com.sidekick.opt_pal.data.model.ComplianceScoreBand
+import com.sidekick.opt_pal.data.model.ComplianceScoreQuality
 import com.sidekick.opt_pal.di.AppModule
 import com.sidekick.opt_pal.data.model.Employment
 import com.sidekick.opt_pal.ui.UiTestTags
@@ -95,7 +101,9 @@ fun DashboardRoute(
     onAddEmployment: () -> Unit,
     onEditEmployment: (String) -> Unit,
     onOpenTaxRefund: () -> Unit,
+    onOpenComplianceScore: () -> Unit,
     onOpenTravelAdvisor: () -> Unit,
+    onOpenPolicyAlerts: () -> Unit,
     onOpenCaseStatus: () -> Unit,
     onOpenReporting: () -> Unit,
     onOpenVault: () -> Unit,
@@ -153,7 +161,9 @@ fun DashboardRoute(
         onAddEmployment = onAddEmployment,
         onEditEmployment = onEditEmployment,
         onOpenTaxRefund = onOpenTaxRefund,
+        onOpenComplianceScore = onOpenComplianceScore,
         onOpenTravelAdvisor = onOpenTravelAdvisor,
+        onOpenPolicyAlerts = onOpenPolicyAlerts,
         onOpenCaseStatus = onOpenCaseStatus,
         onOpenReporting = onOpenReporting,
         onOpenVault = onOpenVault,
@@ -194,7 +204,9 @@ internal fun DashboardScreen(
     onAddEmployment: () -> Unit,
     onEditEmployment: (String) -> Unit,
     onOpenTaxRefund: () -> Unit,
+    onOpenComplianceScore: () -> Unit,
     onOpenTravelAdvisor: () -> Unit,
+    onOpenPolicyAlerts: () -> Unit,
     onOpenCaseStatus: () -> Unit,
     onOpenReporting: () -> Unit,
     onOpenVault: () -> Unit,
@@ -255,6 +267,13 @@ internal fun DashboardScreen(
                         Column(modifier = Modifier.padding(horizontal = 24.dp)) {
                             HeaderSection(state)
                             Spacer(modifier = Modifier.height(60.dp))
+                            state.complianceScore?.let { complianceScore ->
+                                ComplianceScoreSummaryCard(
+                                    score = complianceScore,
+                                    onOpenComplianceScore = onOpenComplianceScore
+                                )
+                                Spacer(modifier = Modifier.height(24.dp))
+                            }
                             MinimalHero(state)
                             Spacer(modifier = Modifier.height(24.dp))
                             CounterStatusSection(
@@ -268,6 +287,14 @@ internal fun DashboardScreen(
                                 UscisSummaryCard(
                                     state = state,
                                     onOpenCaseStatus = onOpenCaseStatus
+                                )
+                            }
+                            if (state.latestCriticalPolicyAlertTitle != null) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                PolicyAlertSummaryCard(
+                                    headline = state.latestCriticalPolicyAlertTitle,
+                                    unreadCount = state.policyAlertUnreadCount,
+                                    onOpenPolicyAlerts = onOpenPolicyAlerts
                                 )
                             }
                             Spacer(modifier = Modifier.height(60.dp))
@@ -285,6 +312,7 @@ internal fun DashboardScreen(
                                 state = state,
                                 onOpenTaxRefund = onOpenTaxRefund,
                                 onOpenTravelAdvisor = onOpenTravelAdvisor,
+                                onOpenPolicyAlerts = onOpenPolicyAlerts,
                                 onOpenCaseStatus = onOpenCaseStatus,
                                 onOpenReporting = onOpenReporting,
                                 onOpenVault = onOpenVault,
@@ -316,6 +344,88 @@ internal fun DashboardScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ComplianceScoreSummaryCard(
+    score: ComplianceHealthScore,
+    onOpenComplianceScore: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(UiTestTags.DASHBOARD_COMPLIANCE_CARD),
+        shape = MaterialTheme.shapes.small,
+        color = complianceBandColor(score.band).copy(alpha = 0.12f),
+        onClick = onOpenComplianceScore
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "COMPLIANCE HEALTH",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = score.band.label(),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = complianceBandColor(score.band),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = score.score.toString(),
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = score.quality.label(),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Filled.Shield,
+                        contentDescription = null,
+                        tint = complianceBandColor(score.band)
+                    )
+                }
+            }
+            LinearProgressIndicator(
+                progress = (score.score / 100f).coerceIn(0f, 1f),
+                modifier = Modifier.fillMaxWidth(),
+                color = complianceBandColor(score.band),
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+            Text(
+                text = score.headline,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            score.topReasons.take(2).forEach { reason ->
+                Text(
+                    text = "- $reason",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                text = buildDeltaLabel(score.delta),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }
@@ -483,6 +593,44 @@ private fun UscisSummaryCard(
 }
 
 @Composable
+private fun PolicyAlertSummaryCard(
+    headline: String,
+    unreadCount: Int,
+    onOpenPolicyAlerts: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(UiTestTags.DASHBOARD_POLICY_ALERT_SUMMARY),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        onClick = onOpenPolicyAlerts
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "POLICY ALERT",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = headline,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = if (unreadCount > 0) "$unreadCount unread alert(s)" else "Reviewed alert summary",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
 fun MinimalCircularProgress(
     progress: Float,
     size: Dp,
@@ -520,6 +668,7 @@ private fun ActionGrid(
     state: DashboardUiState,
     onOpenTaxRefund: () -> Unit,
     onOpenTravelAdvisor: () -> Unit,
+    onOpenPolicyAlerts: () -> Unit,
     onOpenCaseStatus: () -> Unit,
     onOpenReporting: () -> Unit,
     onOpenVault: () -> Unit,
@@ -583,10 +732,16 @@ private fun ActionGrid(
                 hasAlert = state.uscisCaseSummary?.hasRecentChange == true,
                 onClick = onOpenCaseStatus
             )
-            Surface(
-                modifier = Modifier.weight(1f),
-                color = MaterialTheme.colorScheme.background
-            ) {}
+            MinimalActionItem(
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(UiTestTags.DASHBOARD_POLICY_ALERTS_CARD),
+                title = "Alerts",
+                icon = Icons.Filled.NotificationsActive,
+                hasAlert = state.policyAlertUnreadCount > 0,
+                badgeCount = state.policyAlertUnreadCount.takeIf { it > 0 },
+                onClick = onOpenPolicyAlerts
+            )
         }
     }
 }
@@ -597,6 +752,7 @@ private fun MinimalActionItem(
     title: String,
     icon: ImageVector,
     hasAlert: Boolean = false,
+    badgeCount: Int? = null,
     onClick: () -> Unit
 ) {
     Surface(
@@ -626,7 +782,22 @@ private fun MinimalActionItem(
                 )
             }
             
-            if (hasAlert) {
+            if (badgeCount != null && badgeCount > 0) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(10.dp),
+                    color = MaterialTheme.colorScheme.error,
+                    shape = CircleShape
+                ) {
+                    Text(
+                        text = badgeCount.coerceAtMost(9).toString(),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.onError,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            } else if (hasAlert) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -757,4 +928,39 @@ private fun formatDashboardDateTime(timestamp: Long): String {
     val formatter = SimpleDateFormat("MMM d, h:mm a 'UTC'", Locale.US)
     formatter.timeZone = TimeZone.getTimeZone("UTC")
     return formatter.format(Date(timestamp))
+}
+
+private fun ComplianceScoreBand.label(): String {
+    return when (this) {
+        ComplianceScoreBand.STABLE -> "Stable"
+        ComplianceScoreBand.WATCH -> "Watch"
+        ComplianceScoreBand.ACTION_NEEDED -> "Action Needed"
+        ComplianceScoreBand.CRITICAL -> "Critical"
+    }
+}
+
+private fun ComplianceScoreQuality.label(): String {
+    return when (this) {
+        ComplianceScoreQuality.VERIFIED -> "Verified"
+        ComplianceScoreQuality.PROVISIONAL -> "Provisional"
+    }
+}
+
+@Composable
+private fun complianceBandColor(band: ComplianceScoreBand): Color {
+    return when (band) {
+        ComplianceScoreBand.STABLE -> MaterialTheme.colorScheme.primary
+        ComplianceScoreBand.WATCH -> MaterialTheme.colorScheme.tertiary
+        ComplianceScoreBand.ACTION_NEEDED -> MaterialTheme.colorScheme.secondary
+        ComplianceScoreBand.CRITICAL -> MaterialTheme.colorScheme.error
+    }
+}
+
+private fun buildDeltaLabel(delta: Int?): String {
+    return when {
+        delta == null -> "No previous daily snapshot yet"
+        delta > 0 -> "+$delta vs previous daily snapshot"
+        delta < 0 -> "$delta vs previous daily snapshot"
+        else -> "No change vs previous daily snapshot"
+    }
 }
