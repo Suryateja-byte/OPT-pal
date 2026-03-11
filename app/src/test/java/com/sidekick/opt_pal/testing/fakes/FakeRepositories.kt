@@ -21,6 +21,20 @@ import com.sidekick.opt_pal.data.model.FicaEligibilityResult
 import com.sidekick.opt_pal.data.model.FicaRefundCase
 import com.sidekick.opt_pal.data.model.FicaRefundPacket
 import com.sidekick.opt_pal.data.model.FicaUserTaxInputs
+import com.sidekick.opt_pal.data.model.H1bDashboardBundle
+import com.sidekick.opt_pal.data.model.H1bEmployerHistorySummary
+import com.sidekick.opt_pal.data.model.H1bEmployerVerification
+import com.sidekick.opt_pal.data.model.H1bEVerifyStatus
+import com.sidekick.opt_pal.data.model.H1bEvidence
+import com.sidekick.opt_pal.data.model.H1bProfile
+import com.sidekick.opt_pal.data.model.H1bTimelineState
+import com.sidekick.opt_pal.data.model.H1bCaseTracking
+import com.sidekick.opt_pal.data.model.I983Draft
+import com.sidekick.opt_pal.data.model.I983EntitlementSource
+import com.sidekick.opt_pal.data.model.I983EntitlementState
+import com.sidekick.opt_pal.data.model.I983ExportResult
+import com.sidekick.opt_pal.data.model.I983NarrativeDraft
+import com.sidekick.opt_pal.data.model.I983PolicyBundle
 import com.sidekick.opt_pal.data.model.PolicyAlertAvailability
 import com.sidekick.opt_pal.data.model.PolicyAlertCard
 import com.sidekick.opt_pal.data.model.PolicyAlertState
@@ -30,13 +44,22 @@ import com.sidekick.opt_pal.data.model.ReportingWizard
 import com.sidekick.opt_pal.data.model.ReportingWizardEventType
 import com.sidekick.opt_pal.data.model.ReportingWizardInput
 import com.sidekick.opt_pal.data.model.ReportingWizardStartResult
+import com.sidekick.opt_pal.data.model.ScenarioEntitlementSource
+import com.sidekick.opt_pal.data.model.ScenarioDraft
+import com.sidekick.opt_pal.data.model.ScenarioSimulatorBundle
+import com.sidekick.opt_pal.data.model.ScenarioSimulatorEntitlementState
 import com.sidekick.opt_pal.data.model.TravelEntitlementSource
 import com.sidekick.opt_pal.data.model.TravelEntitlementState
 import com.sidekick.opt_pal.data.model.TravelPolicyBundle
 import com.sidekick.opt_pal.data.model.UscisCaseRefreshResult
 import com.sidekick.opt_pal.data.model.UscisCaseTracker
+import com.sidekick.opt_pal.data.model.UscisTrackedFormType
 import com.sidekick.opt_pal.data.model.UscisTrackerAvailability
 import com.sidekick.opt_pal.data.model.UserProfile
+import com.sidekick.opt_pal.data.model.VisaPathwayEntitlementSource
+import com.sidekick.opt_pal.data.model.VisaPathwayEntitlementState
+import com.sidekick.opt_pal.data.model.VisaPathwayPlannerBundle
+import com.sidekick.opt_pal.data.model.VisaPathwayProfile
 import com.sidekick.opt_pal.data.model.W2ExtractionDraft
 import com.sidekick.opt_pal.data.repository.AuthRepository
 import com.sidekick.opt_pal.data.repository.CaseStatusRepository
@@ -44,11 +67,15 @@ import com.sidekick.opt_pal.data.repository.ComplianceHealthRepository
 import com.sidekick.opt_pal.data.repository.DashboardRepository
 import com.sidekick.opt_pal.data.repository.DocumentRepository
 import com.sidekick.opt_pal.data.repository.FicaRefundRepository
+import com.sidekick.opt_pal.data.repository.H1bDashboardRepository
+import com.sidekick.opt_pal.data.repository.I983AssistantRepository
 import com.sidekick.opt_pal.data.repository.NotificationDeviceChannels
 import com.sidekick.opt_pal.data.repository.NotificationDeviceRepository
 import com.sidekick.opt_pal.data.repository.PolicyAlertRepository
 import com.sidekick.opt_pal.data.repository.ReportingRepository
+import com.sidekick.opt_pal.data.repository.ScenarioSimulatorRepository
 import com.sidekick.opt_pal.data.repository.TravelAdvisorRepository
+import com.sidekick.opt_pal.data.repository.VisaPathwayPlannerRepository
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -406,8 +433,17 @@ class FakeDocumentRepository : DocumentRepository {
 class FakeCaseStatusRepository : CaseStatusRepository {
     private val trackedCases = MutableStateFlow<List<UscisCaseTracker>>(emptyList())
     var trackerAvailabilityResult: Result<UscisTrackerAvailability> =
-        Result.success(UscisTrackerAvailability(mode = "sandbox"))
+        Result.success(
+            UscisTrackerAvailability(
+                mode = "sandbox",
+                supportedForms = listOf(
+                    UscisTrackedFormType.I765.wireValue,
+                    UscisTrackedFormType.I129.wireValue
+                )
+            )
+        )
     val trackedReceipts = mutableListOf<String>()
+    val trackedFormHints = mutableListOf<UscisTrackedFormType?>()
     val refreshedCaseIds = mutableListOf<String>()
     val archivedCaseIds = mutableListOf<String>()
     val removedCaseIds = mutableListOf<String>()
@@ -418,8 +454,12 @@ class FakeCaseStatusRepository : CaseStatusRepository {
 
     override suspend fun getTrackerAvailability(): Result<UscisTrackerAvailability> = trackerAvailabilityResult
 
-    override suspend fun trackCase(receiptNumber: String): Result<String> {
+    override suspend fun trackCase(
+        receiptNumber: String,
+        expectedFormType: UscisTrackedFormType?
+    ): Result<String> {
         trackedReceipts += receiptNumber
+        trackedFormHints += expectedFormType
         return Result.success(receiptNumber)
     }
 
@@ -507,6 +547,62 @@ class FakeTravelAdvisorRepository : TravelAdvisorRepository {
     }
 }
 
+class FakeI983AssistantRepository : I983AssistantRepository {
+    private val drafts = mutableMapOf<String, MutableStateFlow<List<I983Draft>>>()
+    var entitlementResult: Result<I983EntitlementState> = Result.success(
+        I983EntitlementState(
+            isEnabled = true,
+            source = I983EntitlementSource.OPEN_BETA,
+            message = "Enabled for tests."
+        )
+    )
+    var cachedBundle: I983PolicyBundle? = null
+    var refreshResult: Result<I983PolicyBundle> = Result.failure(IllegalStateException("No I-983 bundle configured"))
+
+    override suspend fun resolveEntitlement(userFlag: Boolean?): Result<I983EntitlementState> = entitlementResult
+
+    override fun getCachedPolicyBundle(): I983PolicyBundle? = cachedBundle
+
+    override suspend fun refreshPolicyBundle(): Result<I983PolicyBundle> = refreshResult
+
+    override fun observeDrafts(uid: String): Flow<List<I983Draft>> = drafts.getOrPut(uid) { MutableStateFlow(emptyList()) }
+
+    override fun observeDraft(uid: String, draftId: String): Flow<I983Draft?> =
+        drafts.getOrPut(uid) { MutableStateFlow(emptyList()) }.map { items -> items.firstOrNull { it.id == draftId } }
+
+    override suspend fun createDraft(uid: String, draft: I983Draft): Result<String> {
+        val nextId = draft.id.ifBlank { "draft-${drafts.getOrPut(uid) { MutableStateFlow(emptyList()) }.value.size + 1}" }
+        val nextDraft = draft.copy(id = nextId)
+        drafts.getOrPut(uid) { MutableStateFlow(emptyList()) }.value =
+            drafts.getOrPut(uid) { MutableStateFlow(emptyList()) }.value + nextDraft
+        return Result.success(nextId)
+    }
+
+    override suspend fun updateDraft(uid: String, draft: I983Draft): Result<Unit> {
+        val current = drafts.getOrPut(uid) { MutableStateFlow(emptyList()) }.value.toMutableList()
+        val index = current.indexOfFirst { it.id == draft.id }
+        if (index >= 0) current[index] = draft else current += draft
+        drafts.getOrPut(uid) { MutableStateFlow(emptyList()) }.value = current
+        return Result.success(Unit)
+    }
+
+    override suspend fun generateSectionDrafts(draftId: String, selectedDocumentIds: List<String>): Result<I983NarrativeDraft> {
+        return Result.success(I983NarrativeDraft())
+    }
+
+    override suspend fun exportOfficialPdf(draftId: String): Result<I983ExportResult> {
+        return Result.success(I983ExportResult(documentId = "doc-1", fileName = "i983.pdf", generatedAt = 1L, templateVersion = "test"))
+    }
+
+    override suspend fun linkSignedDocument(uid: String, draftId: String, signedDocumentId: String): Result<Unit> {
+        return Result.success(Unit)
+    }
+
+    fun setDrafts(uid: String, items: List<I983Draft>) {
+        drafts.getOrPut(uid) { MutableStateFlow(emptyList()) }.value = items
+    }
+}
+
 class FakePolicyAlertRepository : PolicyAlertRepository {
     private val alerts = MutableStateFlow<List<PolicyAlertCard>>(emptyList())
     private val states = mutableMapOf<String, MutableStateFlow<List<PolicyAlertState>>>()
@@ -557,6 +653,212 @@ class FakePolicyAlertRepository : PolicyAlertRepository {
         states.getOrPut(uid) { MutableStateFlow(emptyList()) }.value = items
     }
 }
+
+class FakeVisaPathwayPlannerRepository : VisaPathwayPlannerRepository {
+    private val profiles = mutableMapOf<String, MutableStateFlow<VisaPathwayProfile?>>()
+    var entitlementResult: Result<VisaPathwayEntitlementState> = Result.success(
+        VisaPathwayEntitlementState(
+            isEnabled = true,
+            source = VisaPathwayEntitlementSource.OPEN_BETA,
+            message = "Enabled for tests."
+        )
+    )
+    var refreshResult: Result<VisaPathwayPlannerBundle> = Result.failure(IllegalStateException("No planner bundle configured"))
+    var cachedPlannerBundle: VisaPathwayPlannerBundle? = null
+    val savedProfiles = mutableListOf<Pair<String, VisaPathwayProfile>>()
+
+    override suspend fun resolveEntitlement(userFlag: Boolean?): Result<VisaPathwayEntitlementState> {
+        return entitlementResult
+    }
+
+    override fun observeProfile(uid: String): Flow<VisaPathwayProfile?> {
+        return profiles.getOrPut(uid) { MutableStateFlow(null) }
+    }
+
+    override suspend fun saveProfile(uid: String, profile: VisaPathwayProfile): Result<Unit> {
+        savedProfiles += uid to profile
+        profiles.getOrPut(uid) { MutableStateFlow(null) }.value = profile
+        return Result.success(Unit)
+    }
+
+    override fun getCachedBundle(): VisaPathwayPlannerBundle? = cachedPlannerBundle
+
+    override suspend fun refreshBundle(): Result<VisaPathwayPlannerBundle> = refreshResult
+
+    fun setProfile(uid: String, profile: VisaPathwayProfile?) {
+        profiles.getOrPut(uid) { MutableStateFlow(null) }.value = profile
+    }
+}
+
+class FakeH1bDashboardRepository : H1bDashboardRepository {
+    private val profiles = mutableMapOf<String, MutableStateFlow<H1bProfile?>>()
+    private val employerVerifications = mutableMapOf<String, MutableStateFlow<H1bEmployerVerification?>>()
+    private val timelineStates = mutableMapOf<String, MutableStateFlow<H1bTimelineState?>>()
+    private val caseTrackingStates = mutableMapOf<String, MutableStateFlow<H1bCaseTracking?>>()
+    private val evidenceStates = mutableMapOf<String, MutableStateFlow<H1bEvidence?>>()
+    var refreshResult: Result<H1bDashboardBundle> =
+        Result.failure(IllegalStateException("No H-1B dashboard bundle configured"))
+    var cachedDashboardBundle: H1bDashboardBundle? = null
+    var employerHistoryResult: Result<H1bEmployerHistorySummary> =
+        Result.failure(IllegalStateException("No employer history stub configured"))
+    var eVerifySnapshotResult: Result<H1bEmployerVerification> =
+        Result.success(H1bEmployerVerification(eVerifyStatus = H1bEVerifyStatus.UNKNOWN.wireValue))
+    val savedProfiles = mutableListOf<Pair<String, H1bProfile>>()
+    val savedEmployerVerifications = mutableListOf<Pair<String, H1bEmployerVerification>>()
+    val savedTimelineStates = mutableListOf<Pair<String, H1bTimelineState>>()
+    val savedCaseTrackingStates = mutableListOf<Pair<String, H1bCaseTracking>>()
+    val savedEvidence = mutableListOf<Pair<String, H1bEvidence>>()
+    val employerHistorySearches = mutableListOf<Triple<String, String?, String?>>()
+    val eVerifySnapshotRequests = mutableListOf<Quadruple<String, String?, String?, H1bEVerifyStatus>>()
+
+    override fun observeProfile(uid: String): Flow<H1bProfile?> =
+        profiles.getOrPut(uid) { MutableStateFlow(null) }
+
+    override fun observeEmployerVerification(uid: String): Flow<H1bEmployerVerification?> =
+        employerVerifications.getOrPut(uid) { MutableStateFlow(null) }
+
+    override fun observeTimelineState(uid: String): Flow<H1bTimelineState?> =
+        timelineStates.getOrPut(uid) { MutableStateFlow(null) }
+
+    override fun observeCaseTracking(uid: String): Flow<H1bCaseTracking?> =
+        caseTrackingStates.getOrPut(uid) { MutableStateFlow(null) }
+
+    override fun observeEvidence(uid: String): Flow<H1bEvidence?> =
+        evidenceStates.getOrPut(uid) { MutableStateFlow(null) }
+
+    override suspend fun saveProfile(uid: String, profile: H1bProfile): Result<Unit> {
+        savedProfiles += uid to profile
+        profiles.getOrPut(uid) { MutableStateFlow(null) }.value = profile
+        return Result.success(Unit)
+    }
+
+    override suspend fun saveEmployerVerification(uid: String, verification: H1bEmployerVerification): Result<Unit> {
+        savedEmployerVerifications += uid to verification
+        employerVerifications.getOrPut(uid) { MutableStateFlow(null) }.value = verification
+        return Result.success(Unit)
+    }
+
+    override suspend fun saveTimelineState(uid: String, timelineState: H1bTimelineState): Result<Unit> {
+        savedTimelineStates += uid to timelineState
+        timelineStates.getOrPut(uid) { MutableStateFlow(null) }.value = timelineState
+        return Result.success(Unit)
+    }
+
+    override suspend fun saveCaseTracking(uid: String, caseTracking: H1bCaseTracking): Result<Unit> {
+        savedCaseTrackingStates += uid to caseTracking
+        caseTrackingStates.getOrPut(uid) { MutableStateFlow(null) }.value = caseTracking
+        return Result.success(Unit)
+    }
+
+    override suspend fun saveEvidence(uid: String, evidence: H1bEvidence): Result<Unit> {
+        savedEvidence += uid to evidence
+        evidenceStates.getOrPut(uid) { MutableStateFlow(null) }.value = evidence
+        return Result.success(Unit)
+    }
+
+    override fun getCachedBundle(): H1bDashboardBundle? = cachedDashboardBundle
+
+    override suspend fun refreshBundle(): Result<H1bDashboardBundle> = refreshResult
+
+    override suspend fun searchEmployerHistory(
+        employerName: String,
+        employerCity: String?,
+        employerState: String?
+    ): Result<H1bEmployerHistorySummary> {
+        employerHistorySearches += Triple(employerName, employerCity, employerState)
+        return employerHistoryResult
+    }
+
+    override suspend fun saveEVerifySnapshot(
+        employerName: String,
+        employerCity: String?,
+        employerState: String?,
+        status: H1bEVerifyStatus
+    ): Result<H1bEmployerVerification> {
+        eVerifySnapshotRequests += Quadruple(employerName, employerCity, employerState, status)
+        return eVerifySnapshotResult
+    }
+
+    fun setProfile(uid: String, profile: H1bProfile?) {
+        profiles.getOrPut(uid) { MutableStateFlow(null) }.value = profile
+    }
+
+    fun setEmployerVerification(uid: String, verification: H1bEmployerVerification?) {
+        employerVerifications.getOrPut(uid) { MutableStateFlow(null) }.value = verification
+    }
+
+    fun setTimelineState(uid: String, timelineState: H1bTimelineState?) {
+        timelineStates.getOrPut(uid) { MutableStateFlow(null) }.value = timelineState
+    }
+
+    fun setCaseTracking(uid: String, caseTracking: H1bCaseTracking?) {
+        caseTrackingStates.getOrPut(uid) { MutableStateFlow(null) }.value = caseTracking
+    }
+
+    fun setEvidence(uid: String, evidence: H1bEvidence?) {
+        evidenceStates.getOrPut(uid) { MutableStateFlow(null) }.value = evidence
+    }
+}
+
+class FakeScenarioSimulatorRepository : ScenarioSimulatorRepository {
+    private val drafts = mutableMapOf<String, MutableStateFlow<List<ScenarioDraft>>>()
+    var entitlementResult: Result<ScenarioSimulatorEntitlementState> = Result.success(
+        ScenarioSimulatorEntitlementState(
+            isEnabled = true,
+            source = ScenarioEntitlementSource.OPEN_BETA,
+            message = "Enabled for tests."
+        )
+    )
+    var cachedScenarioBundle: ScenarioSimulatorBundle? = null
+    var refreshResult: Result<ScenarioSimulatorBundle> =
+        Result.failure(IllegalStateException("No scenario simulator bundle configured"))
+    val savedDrafts = mutableListOf<Pair<String, ScenarioDraft>>()
+    val deletedDrafts = mutableListOf<Pair<String, String>>()
+
+    override suspend fun resolveEntitlement(userFlag: Boolean?): Result<ScenarioSimulatorEntitlementState> {
+        return entitlementResult
+    }
+
+    override fun observeDrafts(uid: String): Flow<List<ScenarioDraft>> =
+        drafts.getOrPut(uid) { MutableStateFlow(emptyList()) }
+
+    override suspend fun saveDraft(uid: String, draft: ScenarioDraft): Result<String> {
+        savedDrafts += uid to draft
+        val nextId = draft.id.ifBlank { "scenario-${drafts.getOrPut(uid) { MutableStateFlow(emptyList()) }.value.size + 1}" }
+        val nextDraft = draft.copy(id = nextId)
+        val current = drafts.getOrPut(uid) { MutableStateFlow(emptyList()) }.value.toMutableList()
+        val index = current.indexOfFirst { it.id == nextId }
+        if (index >= 0) {
+            current[index] = nextDraft
+        } else {
+            current += nextDraft
+        }
+        drafts.getOrPut(uid) { MutableStateFlow(emptyList()) }.value = current
+        return Result.success(nextId)
+    }
+
+    override suspend fun deleteDraft(uid: String, scenarioId: String): Result<Unit> {
+        deletedDrafts += uid to scenarioId
+        drafts.getOrPut(uid) { MutableStateFlow(emptyList()) }.value =
+            drafts.getOrPut(uid) { MutableStateFlow(emptyList()) }.value.filterNot { it.id == scenarioId }
+        return Result.success(Unit)
+    }
+
+    override fun getCachedBundle(): ScenarioSimulatorBundle? = cachedScenarioBundle
+
+    override suspend fun refreshBundle(): Result<ScenarioSimulatorBundle> = refreshResult
+
+    fun setDrafts(uid: String, items: List<ScenarioDraft>) {
+        drafts.getOrPut(uid) { MutableStateFlow(emptyList()) }.value = items
+    }
+}
+
+data class Quadruple<A, B, C, D>(
+    val first: A,
+    val second: B,
+    val third: C,
+    val fourth: D
+)
 
 class FakeFicaRefundRepository : FicaRefundRepository {
     private val cases = MutableStateFlow<List<FicaRefundCase>>(emptyList())

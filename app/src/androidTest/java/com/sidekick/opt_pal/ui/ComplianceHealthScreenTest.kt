@@ -79,7 +79,8 @@ class ComplianceHealthScreenTest {
                     onRunAction = {},
                     onOpenPolicyAlert = {},
                     onOpenReference = {},
-                    onContactDso = {}
+                    onContactDso = {},
+                    onOpenVisaPathwayPlanner = {}
                 )
             }
         }

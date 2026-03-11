@@ -64,10 +64,12 @@ import java.util.TimeZone
 @Composable
 fun PolicyAlertFeedRoute(
     selectedAlertId: String?,
+    initialFilter: String?,
     onNavigateBack: () -> Unit,
     onOpenTravelAdvisor: () -> Unit,
+    onOpenVisaPathwayPlanner: (String?) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: PolicyAlertFeedViewModel = viewModel(factory = PolicyAlertFeedViewModel.provideFactory(selectedAlertId))
+    viewModel: PolicyAlertFeedViewModel = viewModel(factory = PolicyAlertFeedViewModel.provideFactory(selectedAlertId, initialFilter))
 ) {
     val state = viewModel.uiState.collectAsStateWithLifecycle().value
     val context = LocalContext.current
@@ -109,6 +111,10 @@ fun PolicyAlertFeedRoute(
         onPrimaryAction = { alert ->
             if (alert.callToActionRoute == AppScreen.TravelAdvisor.route) {
                 onOpenTravelAdvisor()
+            } else if (alert.callToActionRoute?.startsWith("visaPathwayPlanner") == true) {
+                val pathwayId = alert.callToActionRoute.substringAfter("pathwayId=", "")
+                    .takeIf { it.isNotBlank() }
+                onOpenVisaPathwayPlanner(pathwayId)
             } else {
                 AnalyticsLogger.logPolicyAlertSourceOpened(alert.id)
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(alert.source.url)))

@@ -31,7 +31,8 @@ class PolicyAlertFeedViewModelTest {
         val viewModel = PolicyAlertFeedViewModel(
             authRepository = authRepository,
             policyAlertRepository = policyAlertRepository,
-            selectedAlertIdArg = "alert-2"
+            selectedAlertIdArg = "alert-2",
+            initialFilterArg = null
         )
         policyAlertRepository.availabilityResult = Result.success(
             PolicyAlertAvailability(isEnabled = true, message = "Enabled")
@@ -58,7 +59,8 @@ class PolicyAlertFeedViewModelTest {
         val viewModel = PolicyAlertFeedViewModel(
             authRepository = authRepository,
             policyAlertRepository = policyAlertRepository,
-            selectedAlertIdArg = null
+            selectedAlertIdArg = null,
+            initialFilterArg = null
         )
         policyAlertRepository.setAlerts(
             listOf(
@@ -88,7 +90,8 @@ class PolicyAlertFeedViewModelTest {
         val viewModel = PolicyAlertFeedViewModel(
             authRepository = authRepository,
             policyAlertRepository = policyAlertRepository,
-            selectedAlertIdArg = "alert-1"
+            selectedAlertIdArg = "alert-1",
+            initialFilterArg = null
         )
 
         authRepository.emitUser(mockUser("user-3"))

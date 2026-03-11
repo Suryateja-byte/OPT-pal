@@ -33,9 +33,12 @@ object UiTestTags {
     const val DASHBOARD_USCIS_SUMMARY = "dashboard_uscis_summary"
     const val DASHBOARD_TAX_REFUND_CARD = "dashboard_tax_refund_card"
     const val DASHBOARD_TRAVEL_ADVISOR_CARD = "dashboard_travel_advisor_card"
+    const val DASHBOARD_I983_CARD = "dashboard_i983_card"
     const val DASHBOARD_POLICY_ALERTS_CARD = "dashboard_policy_alerts_card"
     const val DASHBOARD_POLICY_ALERT_SUMMARY = "dashboard_policy_alert_summary"
     const val DASHBOARD_COMPLIANCE_CARD = "dashboard_compliance_card"
+    const val DASHBOARD_H1B_CARD = "dashboard_h1b_card"
+    const val DASHBOARD_SCENARIO_CARD = "dashboard_scenario_card"
 
     const val CASE_STATUS_RECEIPT_FIELD = "case_status_receipt_field"
     const val CASE_STATUS_ADD_BUTTON = "case_status_add_button"
@@ -104,4 +107,18 @@ object UiTestTags {
 
     const val COMPLIANCE_HEALTH_SCREEN = "compliance_health_screen"
     const val COMPLIANCE_HEALTH_FACTOR_LIST = "compliance_health_factor_list"
+
+    const val I983_SCREEN = "i983_screen"
+    const val I983_LOCKED_PREVIEW = "i983_locked_preview"
+    const val I983_WORKFLOW_SELECTOR = "i983_workflow_selector"
+    const val I983_REVIEW_EXPORT_SECTION = "i983_review_export_section"
+
+    const val VISA_PATHWAY_SCREEN = "visa_pathway_screen"
+    const val VISA_PATHWAY_LOCKED_PREVIEW = "visa_pathway_locked_preview"
+    const val VISA_PATHWAY_QUESTIONNAIRE = "visa_pathway_questionnaire"
+    const val VISA_PATHWAY_CARD_LIST = "visa_pathway_card_list"
+    const val DASHBOARD_VISA_PATHWAY_CARD = "dashboard_visa_pathway_card"
+    const val DASHBOARD_VISA_PATHWAY_SUMMARY = "dashboard_visa_pathway_summary"
+    const val H1B_DASHBOARD_SCREEN = "h1b_dashboard_screen"
+    const val SCENARIO_SIMULATOR_SCREEN = "scenario_simulator_screen"
 }

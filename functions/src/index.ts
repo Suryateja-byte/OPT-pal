@@ -311,6 +311,25 @@ If the document is an I-20, an EAD card, a passport bio page, or an F-1 visa, in
 - visa_class
 - visa_expiration_date
 
+If the document is a prior I-983, offer letter, or job description, also include these canonical keys when present:
+- degree_level
+- degree_awarded_date
+- employer_ein
+- employer_naics
+- hours_per_week
+- compensation_text
+- site_name
+- site_address
+- employer_official_name
+- employer_official_title
+- employer_official_email
+- employer_official_phone
+- i983_role_description
+- i983_goals_objectives
+- i983_employer_oversight
+- i983_measures_assessments
+- i983_additional_remarks
+
 Use YYYY-MM-DD for dates when possible. Keep any other useful fields too.
 
 OCR Input Text:
@@ -441,6 +460,23 @@ export function canonicalizeDocumentExtraction(
     "visa_expires",
     "expires_on"
   ));
+  const degreeLevel = firstString(normalizedIndex, "degree_level", "level_type_of_qualifying_degree");
+  const degreeAwardedDate = normalizeDateValue(firstValue(normalizedIndex, "degree_awarded_date", "date_awarded"));
+  const employerEin = firstString(normalizedIndex, "employer_ein", "ein");
+  const employerNaics = firstString(normalizedIndex, "employer_naics", "naics_code");
+  const hoursPerWeek = firstString(normalizedIndex, "hours_per_week", "weekly_hours");
+  const compensationText = firstString(normalizedIndex, "compensation_text", "salary_amount_and_frequency", "salary");
+  const siteName = firstString(normalizedIndex, "site_name");
+  const siteAddress = firstString(normalizedIndex, "site_address", "worksite_address");
+  const employerOfficialName = firstString(normalizedIndex, "employer_official_name", "official_name");
+  const employerOfficialTitle = firstString(normalizedIndex, "employer_official_title", "official_title");
+  const employerOfficialEmail = firstString(normalizedIndex, "employer_official_email", "official_email");
+  const employerOfficialPhone = firstString(normalizedIndex, "employer_official_phone", "official_phone");
+  const i983RoleDescription = firstString(normalizedIndex, "i983_role_description", "student_role");
+  const i983GoalsObjectives = firstString(normalizedIndex, "i983_goals_objectives", "goals_and_objectives");
+  const i983EmployerOversight = firstString(normalizedIndex, "i983_employer_oversight", "employer_oversight");
+  const i983MeasuresAssessments = firstString(normalizedIndex, "i983_measures_assessments", "measures_and_assessments");
+  const i983AdditionalRemarks = firstString(normalizedIndex, "i983_additional_remarks", "additional_remarks");
 
   if (sevisId) {
     canonicalData.sevis_id = sevisId.toUpperCase();
@@ -484,6 +520,25 @@ export function canonicalizeDocumentExtraction(
   if (visaExpirationDate) {
     canonicalData.visa_expiration_date = visaExpirationDate;
   }
+  if (normalizedType !== "W-2 Form") {
+    if (degreeLevel) canonicalData.degree_level = degreeLevel;
+    if (degreeAwardedDate) canonicalData.degree_awarded_date = degreeAwardedDate;
+    if (employerEin) canonicalData.employer_ein = employerEin;
+    if (employerNaics) canonicalData.employer_naics = employerNaics;
+    if (hoursPerWeek) canonicalData.hours_per_week = hoursPerWeek;
+    if (compensationText) canonicalData.compensation_text = compensationText;
+    if (siteName) canonicalData.site_name = siteName;
+    if (siteAddress) canonicalData.site_address = siteAddress;
+    if (employerOfficialName) canonicalData.employer_official_name = employerOfficialName;
+    if (employerOfficialTitle) canonicalData.employer_official_title = employerOfficialTitle;
+    if (employerOfficialEmail) canonicalData.employer_official_email = employerOfficialEmail;
+    if (employerOfficialPhone) canonicalData.employer_official_phone = employerOfficialPhone;
+    if (i983RoleDescription) canonicalData.i983_role_description = i983RoleDescription;
+    if (i983GoalsObjectives) canonicalData.i983_goals_objectives = i983GoalsObjectives;
+    if (i983EmployerOversight) canonicalData.i983_employer_oversight = i983EmployerOversight;
+    if (i983MeasuresAssessments) canonicalData.i983_measures_assessments = i983MeasuresAssessments;
+    if (i983AdditionalRemarks) canonicalData.i983_additional_remarks = i983AdditionalRemarks;
+  }
 
   if (normalizedType === "I-20 Form") {
     canonicalData.document_type = "i20";
@@ -493,6 +548,12 @@ export function canonicalizeDocumentExtraction(
     canonicalData.document_type = "passport";
   } else if (normalizedType === "F-1 Visa") {
     canonicalData.document_type = "visa";
+  } else if (normalizedType === "I-983 Form") {
+    canonicalData.document_type = "i983";
+  } else if (normalizedType === "Offer Letter") {
+    canonicalData.document_type = "offer_letter";
+  } else if (normalizedType === "Job Description") {
+    canonicalData.document_type = "job_description";
   } else if (normalizedType === "W-2 Form") {
     canonicalData.document_type = "w2";
     const employeeName = firstString(normalizedIndex, "employee_name", "employee", "name");
@@ -592,6 +653,29 @@ function normalizeStructuredDocumentType(
     normalizedIndex.has("medicaretaxbox6")
   ) {
     return "W-2 Form";
+  }
+
+  if (
+    normalizedType.includes("i983") ||
+    normalizedText.includes("trainingplanforstemoptstudents") ||
+    normalizedIndex.has("i983roledescription") ||
+    normalizedIndex.has("degreelevel")
+  ) {
+    return "I-983 Form";
+  }
+
+  if (
+    normalizedType.includes("offerletter") ||
+    normalizedText.includes("offerletter")
+  ) {
+    return "Offer Letter";
+  }
+
+  if (
+    normalizedType.includes("jobdescription") ||
+    normalizedText.includes("jobdescription")
+  ) {
+    return "Job Description";
   }
 
   return typeLabel || "Unknown";
@@ -1218,10 +1302,23 @@ export {
   prepareReportingWizard,
 } from "./reportingWizard";
 export {
+  exportI983OfficialPdf,
+  generateI983SectionDrafts,
+  getI983AssistantBundle,
+} from "./i983Assistant";
+export {
   publishApprovedPolicyAlertCandidate,
   syncNotificationDevice,
   syncPolicyAlertCandidates,
 } from "./policyAlerts";
+export {
+  getH1bDashboardBundle,
+  saveEVerifySnapshot,
+  searchH1bEmployerHistory,
+  syncH1bEmployerDataHub,
+} from "./h1bDashboard";
+export {getScenarioSimulatorBundle} from "./scenarioSimulator";
+export {getVisaPathwayPlannerBundle} from "./visaPathwayPlanner";
 export {
   archiveUscisCase,
   getUscisTrackerAvailability,

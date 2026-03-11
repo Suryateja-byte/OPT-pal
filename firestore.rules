@@ -16,6 +16,10 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).changedKeys().hasOnly([
           'uid',
           'email',
+          'travelAdvisorEnabled',
+          'i983AssistantEnabled',
+          'visaPathwayPlannerEnabled',
+          'scenarioSimulatorEnabled',
           'optType',
           'optStartDate',
           'unemploymentTrackingStartDate',
@@ -99,6 +103,223 @@ service cloud.firestore {
           'copiedAt'
         ]);
       allow delete: if false;
+    }
+
+    match /users/{userId}/i983Drafts/{draftId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) &&
+        request.resource.data.keys().hasOnly([
+          'workflowType',
+          'status',
+          'linkedEmploymentId',
+          'linkedObligationId',
+          'revisionOfDraftId',
+          'templateVersion',
+          'policyVersion',
+          'selectedDocumentIds',
+          'latestExportDocumentId',
+          'signedDocumentId',
+          'studentSection',
+          'employerSection',
+          'trainingPlanSection',
+          'evaluationSection',
+          'generatedNarrative',
+          'createdAt',
+          'updatedAt',
+          'exportedAt',
+          'signedLinkedAt'
+        ]);
+      allow update: if isOwner(userId) &&
+        changedOnly([
+          'workflowType',
+          'status',
+          'linkedEmploymentId',
+          'linkedObligationId',
+          'revisionOfDraftId',
+          'templateVersion',
+          'policyVersion',
+          'selectedDocumentIds',
+          'latestExportDocumentId',
+          'signedDocumentId',
+          'studentSection',
+          'employerSection',
+          'trainingPlanSection',
+          'evaluationSection',
+          'generatedNarrative',
+          'updatedAt',
+          'exportedAt',
+          'signedLinkedAt'
+        ]);
+      allow delete: if isOwner(userId);
+    }
+
+    match /users/{userId}/visaPathwayPlanner/{docId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) &&
+        request.resource.data.keys().hasOnly([
+          'desiredContinuityDate',
+          'employerType',
+          'employerUsesEVerify',
+          'employerWillSponsorH1b',
+          'h1bRegistrationStatus',
+          'degreeLevel',
+          'hasPriorUsStemDegree',
+          'roleDirectlyRelatedToDegree',
+          'hasPetitioningEmployerOrAgent',
+          'o1EvidenceSignals',
+          'preferredPathwayId',
+          'hasStatusViolation',
+          'hasArrestHistory',
+          'hasUnauthorizedEmployment',
+          'hasRfeOrNoid',
+          'updatedAt'
+        ]);
+      allow update: if isOwner(userId) &&
+        changedOnly([
+          'desiredContinuityDate',
+          'employerType',
+          'employerUsesEVerify',
+          'employerWillSponsorH1b',
+          'h1bRegistrationStatus',
+          'degreeLevel',
+          'hasPriorUsStemDegree',
+          'roleDirectlyRelatedToDegree',
+          'hasPetitioningEmployerOrAgent',
+          'o1EvidenceSignals',
+          'preferredPathwayId',
+          'hasStatusViolation',
+          'hasArrestHistory',
+          'hasUnauthorizedEmployment',
+          'hasRfeOrNoid',
+          'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    match /users/{userId}/h1bDashboard/{docId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && (
+        (docId == 'profile' && request.resource.data.keys().hasOnly([
+          'employerName',
+          'employerCity',
+          'employerState',
+          'feinLastFour',
+          'employerType',
+          'selfReportedSponsorIntent',
+          'roleMatchesSpecialtyOccupation',
+          'updatedAt'
+        ])) ||
+        (docId == 'employerVerification' && request.resource.data.keys().hasOnly([
+          'eVerifyStatus',
+          'eVerifyLookedUpAt',
+          'eVerifySourceUrl',
+          'eVerifyUserConfirmed',
+          'employerHistory',
+          'updatedAt'
+        ])) ||
+        (docId == 'timelineState' && request.resource.data.keys().hasOnly([
+          'workflowStage',
+          'selectedRegistration',
+          'filedPetition',
+          'requestedChangeOfStatus',
+          'requestedConsularProcessing',
+          'receiptNumber',
+          'updatedAt'
+        ])) ||
+        (docId == 'caseTracking' && request.resource.data.keys().hasOnly([
+          'linkedCaseId',
+          'linkedReceiptNumber',
+          'updatedAt'
+        ])) ||
+        (docId == 'evidence' && request.resource.data.keys().hasOnly([
+          'hasEmployerLetter',
+          'hasWageInfo',
+          'hasDegreeMatchEvidence',
+          'hasRegistrationConfirmation',
+          'hasReceiptNotice',
+          'hasCapExemptSupport',
+          'capGapTravelPlanned',
+          'hasRfeOrNoid',
+          'updatedAt'
+        ]))
+      );
+      allow update: if isOwner(userId) && (
+        (docId == 'profile' && changedOnly([
+          'employerName',
+          'employerCity',
+          'employerState',
+          'feinLastFour',
+          'employerType',
+          'selfReportedSponsorIntent',
+          'roleMatchesSpecialtyOccupation',
+          'updatedAt'
+        ])) ||
+        (docId == 'employerVerification' && changedOnly([
+          'eVerifyStatus',
+          'eVerifyLookedUpAt',
+          'eVerifySourceUrl',
+          'eVerifyUserConfirmed',
+          'employerHistory',
+          'updatedAt'
+        ])) ||
+        (docId == 'timelineState' && changedOnly([
+          'workflowStage',
+          'selectedRegistration',
+          'filedPetition',
+          'requestedChangeOfStatus',
+          'requestedConsularProcessing',
+          'receiptNumber',
+          'updatedAt'
+        ])) ||
+        (docId == 'caseTracking' && changedOnly([
+          'linkedCaseId',
+          'linkedReceiptNumber',
+          'updatedAt'
+        ])) ||
+        (docId == 'evidence' && changedOnly([
+          'hasEmployerLetter',
+          'hasWageInfo',
+          'hasDegreeMatchEvidence',
+          'hasRegistrationConfirmation',
+          'hasReceiptNotice',
+          'hasCapExemptSupport',
+          'capGapTravelPlanned',
+          'hasRfeOrNoid',
+          'updatedAt'
+        ]))
+      );
+      allow delete: if false;
+    }
+
+    match /users/{userId}/scenarioSimulatorDrafts/{scenarioId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) &&
+        request.resource.data.keys().hasOnly([
+          'templateId',
+          'name',
+          'assumptions',
+          'createdAt',
+          'updatedAt',
+          'lastRunAt',
+          'baselineFingerprint',
+          'lastOutcome',
+          'archivedAt',
+          'pinned'
+        ]);
+      allow update: if isOwner(userId) &&
+        changedOnly([
+          'templateId',
+          'name',
+          'assumptions',
+          'createdAt',
+          'updatedAt',
+          'lastRunAt',
+          'baselineFingerprint',
+          'lastOutcome',
+          'archivedAt',
+          'pinned'
+        ]);
+      allow delete: if isOwner(userId);
     }
 
     match /users/{userId}/uscisCases/{caseId} {

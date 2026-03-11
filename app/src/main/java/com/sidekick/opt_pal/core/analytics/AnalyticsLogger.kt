@@ -164,4 +164,64 @@ object AnalyticsLogger {
             }
         }
     }
+
+    fun logI983AssistantOpened() {
+        withAnalytics { logEvent("i983_assistant_opened") {} }
+    }
+
+    fun logI983DraftCreated(workflowType: String) {
+        withAnalytics {
+            logEvent("i983_draft_created") {
+                param("workflow_type", workflowType.take(80))
+            }
+        }
+    }
+
+    fun logI983NarrativeGenerated(classification: String) {
+        withAnalytics {
+            logEvent("i983_narrative_generated") {
+                param("classification", classification.take(80))
+            }
+        }
+    }
+
+    fun logI983Exported(templateVersion: String) {
+        withAnalytics {
+            logEvent("i983_exported") {
+                param("template_version", templateVersion.take(80))
+            }
+        }
+    }
+
+    fun logI983SignedDocumentLinked() {
+        withAnalytics { logEvent("i983_signed_document_linked") {} }
+    }
+
+    fun logI983EntitlementBlocked(source: String) {
+        withAnalytics {
+            logEvent("i983_entitlement_blocked") {
+                param("source", source.take(80))
+            }
+        }
+    }
+
+    fun logVisaPathwayPlannerOpened() {
+        withAnalytics { logEvent("visa_pathway_planner_opened") {} }
+    }
+
+    fun logVisaPathwayPlannerActionClicked(actionId: String) {
+        withAnalytics {
+            logEvent("visa_pathway_planner_action_clicked") {
+                param("action_id", actionId.take(80))
+            }
+        }
+    }
+
+    fun logVisaPathwayPlannerSourceOpened(sourceId: String) {
+        withAnalytics {
+            logEvent("visa_pathway_planner_source_opened") {
+                param("source_id", sourceId.take(80))
+            }
+        }
+    }
 }

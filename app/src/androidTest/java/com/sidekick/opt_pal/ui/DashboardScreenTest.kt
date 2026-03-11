@@ -29,6 +29,7 @@ class DashboardScreenTest {
         var addEmploymentClicked = false
         var travelClicked = false
         var complianceClicked = false
+        var scenarioClicked = false
         val state = DashboardUiState(
             isLoading = false,
             displayName = "Alex",
@@ -62,6 +63,9 @@ class DashboardScreenTest {
                     onOpenTaxRefund = {},
                     onOpenComplianceScore = { complianceClicked = true },
                     onOpenTravelAdvisor = { travelClicked = true },
+                    onOpenVisaPathwayPlanner = {},
+                    onOpenScenarioSimulator = { scenarioClicked = true },
+                    onOpenI983Assistant = {},
                     onOpenPolicyAlerts = {},
                     onOpenCaseStatus = {},
                     onOpenReporting = {},
@@ -83,9 +87,58 @@ class DashboardScreenTest {
         composeRule.onNodeWithTag(UiTestTags.DASHBOARD_GREETING).assertTextContains("Hello")
         composeRule.onNodeWithTag(UiTestTags.DASHBOARD_COMPLIANCE_CARD).performClick()
         composeRule.onNodeWithTag(UiTestTags.DASHBOARD_TRAVEL_ADVISOR_CARD).performClick()
+        composeRule.onNodeWithTag(UiTestTags.DASHBOARD_SCENARIO_CARD).performClick()
         composeRule.onNodeWithTag(UiTestTags.DASHBOARD_FAB).performClick()
         assertTrue(complianceClicked)
         assertTrue(travelClicked)
+        assertTrue(scenarioClicked)
         assertTrue(addEmploymentClicked)
+    }
+
+    @Test
+    fun rendersLatestScenarioSummary() {
+        val state = DashboardUiState(
+            isLoading = false,
+            displayName = "Alex",
+            optLabel = "Initial 12-Month",
+            latestScenarioDraftName = "Cap-gap fallback",
+            latestScenarioOutcomeLabel = "High risk",
+            latestScenarioHeadline = "Travel during pending COS can break cap-gap continuity.",
+            latestScenarioConfidenceLabel = "Hypothetical"
+        )
+
+        composeRule.setContent {
+            OPTPalTheme {
+                DashboardScreen(
+                    state = state,
+                    onAddEmployment = {},
+                    onEditEmployment = {},
+                    onOpenTaxRefund = {},
+                    onOpenComplianceScore = {},
+                    onOpenTravelAdvisor = {},
+                    onOpenVisaPathwayPlanner = {},
+                    onOpenScenarioSimulator = {},
+                    onOpenI983Assistant = {},
+                    onOpenPolicyAlerts = {},
+                    onOpenCaseStatus = {},
+                    onOpenReporting = {},
+                    onOpenVault = {},
+                    onSendFeedback = {},
+                    onOpenLegal = {},
+                    onScanDocument = {},
+                    onOpenChat = {},
+                    onDeleteEmployment = {},
+                    onSignOut = {},
+                    onReprocessDocuments = {},
+                    onCounterAction = {},
+                    showEnableAlertsAction = false,
+                    onEnableAlerts = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag(UiTestTags.DASHBOARD_SCENARIO_CARD).assertTextContains("High risk")
+        composeRule.onNodeWithTag(UiTestTags.DASHBOARD_SCENARIO_CARD)
+            .assertTextContains("Travel during pending COS can break cap-gap continuity.")
     }
 }

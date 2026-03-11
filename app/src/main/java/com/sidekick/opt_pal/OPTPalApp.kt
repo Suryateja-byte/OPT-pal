@@ -34,6 +34,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.sidekick.opt_pal.core.security.SecuritySessionManager
 import com.sidekick.opt_pal.core.session.SessionViewModel
+import com.sidekick.opt_pal.data.model.I983WorkflowType
 import com.sidekick.opt_pal.di.AppModule
 import com.sidekick.opt_pal.feature.auth.LoginRoute
 import com.sidekick.opt_pal.feature.auth.RegisterRoute
@@ -42,11 +43,15 @@ import com.sidekick.opt_pal.feature.compliance.ComplianceHealthRoute
 import com.sidekick.opt_pal.feature.dashboard.DashboardRoute
 import com.sidekick.opt_pal.feature.employment.AddEmploymentRoute
 import com.sidekick.opt_pal.feature.feedback.FeedbackRoute
+import com.sidekick.opt_pal.feature.h1b.H1bDashboardRoute
+import com.sidekick.opt_pal.feature.i983.I983AssistantRoute
 import com.sidekick.opt_pal.feature.legal.LegalRoute
+import com.sidekick.opt_pal.feature.pathway.VisaPathwayPlannerRoute
 import com.sidekick.opt_pal.feature.policy.PolicyAlertFeedRoute
 import com.sidekick.opt_pal.feature.reporting.ManageReportingRoute
 import com.sidekick.opt_pal.feature.reporting.ReportingRoute
 import com.sidekick.opt_pal.feature.reporting.ReportingWizardRoute
+import com.sidekick.opt_pal.feature.scenario.ScenarioSimulatorRoute
 import com.sidekick.opt_pal.feature.setup.SetupRoute
 import com.sidekick.opt_pal.feature.tax.FicaTaxRefundRoute
 import com.sidekick.opt_pal.feature.travel.TravelAdvisorRoute
@@ -169,6 +174,10 @@ fun OPTPalApp(
                         onOpenTaxRefund = { navController.navigate(AppScreen.TaxRefund.route) },
                         onOpenComplianceScore = { navController.navigate(AppScreen.ComplianceScore.route) },
                         onOpenTravelAdvisor = { navController.navigate(AppScreen.TravelAdvisor.route) },
+                        onOpenVisaPathwayPlanner = { navController.navigate(AppScreen.VisaPathwayPlanner.createRoute()) },
+                        onOpenH1bDashboard = { navController.navigate(AppScreen.H1bDashboard.route) },
+                        onOpenScenarioSimulator = { navController.navigate(AppScreen.ScenarioSimulator.createRoute()) },
+                        onOpenI983Assistant = { navController.navigate(AppScreen.I983Assistant.createRoute()) },
                         onOpenPolicyAlerts = { navController.navigate(AppScreen.PolicyAlerts.createRoute()) },
                         onOpenCaseStatus = { navController.navigate(AppScreen.CaseStatus.createRoute()) },
                         onOpenReporting = { navController.navigate(AppScreen.Reporting.route) },
@@ -177,6 +186,44 @@ fun OPTPalApp(
                         onOpenLegal = { navController.navigate(AppScreen.Legal.route) },
                         onScanDocument = { navController.navigate(AppScreen.DocumentSelection.route) },
                         onOpenChat = { navController.navigate(AppScreen.Chat.route) }
+                    )
+                }
+                composable(
+                    AppScreen.H1bDashboard.route
+                ) {
+                    H1bDashboardRoute(
+                        onNavigateBack = { navController.popBackStack() },
+                        onOpenCaseStatus = { navController.navigate(AppScreen.CaseStatus.createRoute()) },
+                        onOpenVisaPathwayPlanner = { navController.navigate(AppScreen.VisaPathwayPlanner.createRoute()) },
+                        onOpenScenarioSimulator = {
+                            navController.navigate(
+                                AppScreen.ScenarioSimulator.createRoute(
+                                    templateId = "h1b_cap_continuity"
+                                )
+                            )
+                        }
+                    )
+                }
+                composable(
+                    AppScreen.ScenarioSimulator.route,
+                    arguments = listOf(
+                        navArgument(AppScreen.ScenarioSimulator.TEMPLATE_ID_ARG) {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        },
+                        navArgument(AppScreen.ScenarioSimulator.DRAFT_ID_ARG) {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) { backStackEntry ->
+                    ScenarioSimulatorRoute(
+                        initialTemplateId = backStackEntry.arguments?.getString(AppScreen.ScenarioSimulator.TEMPLATE_ID_ARG),
+                        initialDraftId = backStackEntry.arguments?.getString(AppScreen.ScenarioSimulator.DRAFT_ID_ARG),
+                        onNavigateBack = { navController.popBackStack() },
+                        onNavigateToRoute = { route -> navController.navigate(route) }
                     )
                 }
                 composable(
@@ -211,7 +258,57 @@ fun OPTPalApp(
                 composable(AppScreen.TravelAdvisor.route) {
                     TravelAdvisorRoute(
                         onNavigateBack = { navController.popBackStack() },
-                        onUploadMissingDocument = { navController.navigate(AppScreen.DocumentSelection.route) }
+                        onUploadMissingDocument = { navController.navigate(AppScreen.DocumentSelection.route) },
+                        onOpenScenarioSimulator = {
+                            navController.navigate(
+                                AppScreen.ScenarioSimulator.createRoute(
+                                    templateId = "international_travel"
+                                )
+                            )
+                        }
+                    )
+                }
+                composable(
+                    AppScreen.VisaPathwayPlanner.route,
+                    arguments = listOf(
+                        navArgument(AppScreen.VisaPathwayPlanner.PATHWAY_ID_ARG) {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) { backStackEntry ->
+                    VisaPathwayPlannerRoute(
+                        initialPathwayId = backStackEntry.arguments?.getString(AppScreen.VisaPathwayPlanner.PATHWAY_ID_ARG),
+                        onNavigateBack = { navController.popBackStack() },
+                        onNavigateToRoute = { route -> navController.navigate(route) },
+                        onOpenScenarioSimulator = {
+                            navController.navigate(
+                                AppScreen.ScenarioSimulator.createRoute(
+                                    templateId = "add_or_switch_employer"
+                                )
+                            )
+                        }
+                    )
+                }
+                composable(
+                    AppScreen.I983Assistant.route,
+                    arguments = listOf(
+                        navArgument(AppScreen.I983Assistant.DRAFT_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                        navArgument(AppScreen.I983Assistant.OBLIGATION_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                        navArgument(AppScreen.I983Assistant.EMPLOYMENT_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                        navArgument(AppScreen.I983Assistant.WORKFLOW_TYPE_ARG) { type = NavType.StringType; nullable = true; defaultValue = null }
+                    )
+                ) { backStackEntry ->
+                    I983AssistantRoute(
+                        draftId = backStackEntry.arguments?.getString(AppScreen.I983Assistant.DRAFT_ID_ARG),
+                        obligationId = backStackEntry.arguments?.getString(AppScreen.I983Assistant.OBLIGATION_ID_ARG),
+                        employmentId = backStackEntry.arguments?.getString(AppScreen.I983Assistant.EMPLOYMENT_ID_ARG),
+                        workflowType = backStackEntry.arguments?.getString(AppScreen.I983Assistant.WORKFLOW_TYPE_ARG)?.let(I983WorkflowType::fromWireValue),
+                        onNavigateBack = { navController.popBackStack() },
+                        onOpenReporting = { navController.navigate(AppScreen.Reporting.route) },
+                        onOpenVisaPathwayPlanner = { navController.navigate(AppScreen.VisaPathwayPlanner.createRoute()) },
+                        onOpenDocument = { documentId -> navController.navigate(AppScreen.DocumentViewer.createRoute(documentId)) }
                     )
                 }
                 composable(
@@ -221,13 +318,22 @@ fun OPTPalApp(
                             type = NavType.StringType
                             nullable = true
                             defaultValue = null
+                        },
+                        navArgument(AppScreen.PolicyAlerts.FILTER_ARG) {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
                         }
                     )
                 ) { backStackEntry ->
                     PolicyAlertFeedRoute(
                         selectedAlertId = backStackEntry.arguments?.getString(AppScreen.PolicyAlerts.ALERT_ID_ARG),
+                        initialFilter = backStackEntry.arguments?.getString(AppScreen.PolicyAlerts.FILTER_ARG),
                         onNavigateBack = { navController.popBackStack() },
-                        onOpenTravelAdvisor = { navController.navigate(AppScreen.TravelAdvisor.route) }
+                        onOpenTravelAdvisor = { navController.navigate(AppScreen.TravelAdvisor.route) },
+                        onOpenVisaPathwayPlanner = { pathwayId ->
+                            navController.navigate(AppScreen.VisaPathwayPlanner.createRoute(pathwayId))
+                        }
                     )
                 }
                 composable(AppScreen.AddEmployment.route) {
@@ -274,7 +380,17 @@ fun OPTPalApp(
                                     obligationId = obligationId
                                 )
                             )
-                        }
+                        },
+                        onOpenI983Assistant = { obligationId, employmentId, workflowType ->
+                            navController.navigate(
+                                AppScreen.I983Assistant.createRoute(
+                                    obligationId = obligationId,
+                                    employmentId = employmentId,
+                                    workflowType = workflowType.wireValue
+                                )
+                            )
+                        },
+                        onOpenVisaPathwayPlanner = { navController.navigate(AppScreen.VisaPathwayPlanner.createRoute()) }
                     )
                 }
                 composable(

@@ -89,6 +89,7 @@ import com.sidekick.opt_pal.data.model.ComplianceScoreBand
 import com.sidekick.opt_pal.data.model.ComplianceScoreQuality
 import com.sidekick.opt_pal.di.AppModule
 import com.sidekick.opt_pal.data.model.Employment
+import com.sidekick.opt_pal.data.model.VisaPathwayPlannerSummary
 import com.sidekick.opt_pal.ui.UiTestTags
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -103,6 +104,10 @@ fun DashboardRoute(
     onOpenTaxRefund: () -> Unit,
     onOpenComplianceScore: () -> Unit,
     onOpenTravelAdvisor: () -> Unit,
+    onOpenVisaPathwayPlanner: () -> Unit,
+    onOpenH1bDashboard: () -> Unit,
+    onOpenScenarioSimulator: () -> Unit,
+    onOpenI983Assistant: () -> Unit,
     onOpenPolicyAlerts: () -> Unit,
     onOpenCaseStatus: () -> Unit,
     onOpenReporting: () -> Unit,
@@ -163,6 +168,10 @@ fun DashboardRoute(
         onOpenTaxRefund = onOpenTaxRefund,
         onOpenComplianceScore = onOpenComplianceScore,
         onOpenTravelAdvisor = onOpenTravelAdvisor,
+        onOpenVisaPathwayPlanner = onOpenVisaPathwayPlanner,
+        onOpenH1bDashboard = onOpenH1bDashboard,
+        onOpenScenarioSimulator = onOpenScenarioSimulator,
+        onOpenI983Assistant = onOpenI983Assistant,
         onOpenPolicyAlerts = onOpenPolicyAlerts,
         onOpenCaseStatus = onOpenCaseStatus,
         onOpenReporting = onOpenReporting,
@@ -206,6 +215,10 @@ internal fun DashboardScreen(
     onOpenTaxRefund: () -> Unit,
     onOpenComplianceScore: () -> Unit,
     onOpenTravelAdvisor: () -> Unit,
+    onOpenVisaPathwayPlanner: () -> Unit,
+    onOpenH1bDashboard: () -> Unit = {},
+    onOpenScenarioSimulator: () -> Unit,
+    onOpenI983Assistant: () -> Unit,
     onOpenPolicyAlerts: () -> Unit,
     onOpenCaseStatus: () -> Unit,
     onOpenReporting: () -> Unit,
@@ -274,6 +287,23 @@ internal fun DashboardScreen(
                                 )
                                 Spacer(modifier = Modifier.height(24.dp))
                             }
+                            state.visaPathwaySummary?.topAssessment?.let { assessment ->
+                                VisaPathwaySummaryCard(
+                                    summary = state.visaPathwaySummary,
+                                    onOpenVisaPathwayPlanner = onOpenVisaPathwayPlanner
+                                )
+                                Spacer(modifier = Modifier.height(24.dp))
+                            }
+                            H1bDashboardEntryCard(onOpenH1bDashboard = onOpenH1bDashboard)
+                            Spacer(modifier = Modifier.height(24.dp))
+                            ScenarioSimulatorEntryCard(
+                                onOpenScenarioSimulator = onOpenScenarioSimulator,
+                                outcomeLabel = state.latestScenarioOutcomeLabel,
+                                headline = state.latestScenarioHeadline,
+                                draftName = state.latestScenarioDraftName,
+                                confidenceLabel = state.latestScenarioConfidenceLabel
+                            )
+                            Spacer(modifier = Modifier.height(24.dp))
                             MinimalHero(state)
                             Spacer(modifier = Modifier.height(24.dp))
                             CounterStatusSection(
@@ -312,6 +342,8 @@ internal fun DashboardScreen(
                                 state = state,
                                 onOpenTaxRefund = onOpenTaxRefund,
                                 onOpenTravelAdvisor = onOpenTravelAdvisor,
+                                onOpenVisaPathwayPlanner = onOpenVisaPathwayPlanner,
+                                onOpenI983Assistant = onOpenI983Assistant,
                                 onOpenPolicyAlerts = onOpenPolicyAlerts,
                                 onOpenCaseStatus = onOpenCaseStatus,
                                 onOpenReporting = onOpenReporting,
@@ -343,6 +375,150 @@ internal fun DashboardScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VisaPathwaySummaryCard(
+    summary: VisaPathwayPlannerSummary,
+    onOpenVisaPathwayPlanner: () -> Unit
+) {
+    val topAssessment = summary.topAssessment ?: return
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(UiTestTags.DASHBOARD_VISA_PATHWAY_SUMMARY),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        onClick = onOpenVisaPathwayPlanner
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "VISA PATHWAY",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = topAssessment.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = topAssessment.summary,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            topAssessment.nextMilestone?.let { milestone ->
+                Text(
+                    text = "Next milestone: ${milestone.title}${milestone.dueDate?.let { " by ${formatDashboardDate(it)}" } ?: ""}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun H1bDashboardEntryCard(
+    onOpenH1bDashboard: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(UiTestTags.DASHBOARD_H1B_CARD),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        onClick = onOpenH1bDashboard
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "H-1B DASHBOARD",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "Verified H-1B workflow",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "Track employer verification, cap-season dates, I-129 progress, and cap-gap risk in one place.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun ScenarioSimulatorEntryCard(
+    onOpenScenarioSimulator: () -> Unit,
+    outcomeLabel: String? = null,
+    headline: String? = null,
+    draftName: String? = null,
+    confidenceLabel: String? = null
+) {
+    val hasSavedDraft = draftName != null
+    val title = when {
+        outcomeLabel != null -> outcomeLabel
+        hasSavedDraft -> draftName ?: "Saved scenario draft"
+        else -> "Model status-first what-if cases"
+    }
+    val body = when {
+        !headline.isNullOrBlank() -> headline
+        hasSavedDraft -> "Saved draft ready to rerun against your latest OPT, STEM, travel, and H-1B baseline."
+        else -> "Fork your current OPT, STEM, travel, and H-1B state into a saved draft without touching your real records."
+    }
+    val footer = when {
+        outcomeLabel != null -> listOfNotNull(
+            draftName?.takeIf { it.isNotBlank() }?.let { "Latest draft: $it" },
+            confidenceLabel?.takeIf { it.isNotBlank() }?.let { "$it confidence" }
+        ).joinToString(" • ")
+        hasSavedDraft -> "Open latest draft"
+        else -> "Create a new draft"
+    }
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(UiTestTags.DASHBOARD_SCENARIO_CARD),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        onClick = onOpenScenarioSimulator
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "SCENARIO SIMULATOR",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (footer.isNotBlank()) {
+                Text(
+                    text = footer,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
         }
     }
@@ -668,6 +844,8 @@ private fun ActionGrid(
     state: DashboardUiState,
     onOpenTaxRefund: () -> Unit,
     onOpenTravelAdvisor: () -> Unit,
+    onOpenVisaPathwayPlanner: () -> Unit,
+    onOpenI983Assistant: () -> Unit,
     onOpenPolicyAlerts: () -> Unit,
     onOpenCaseStatus: () -> Unit,
     onOpenReporting: () -> Unit,
@@ -726,12 +904,22 @@ private fun ActionGrid(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             MinimalActionItem(
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(UiTestTags.DASHBOARD_I983_CARD),
+                title = "I-983",
+                icon = Icons.Filled.Edit,
+                onClick = onOpenI983Assistant
+            )
+            MinimalActionItem(
                 modifier = Modifier.weight(1f),
                 title = "USCIS",
                 icon = Icons.Filled.Refresh,
                 hasAlert = state.uscisCaseSummary?.hasRecentChange == true,
                 onClick = onOpenCaseStatus
             )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             MinimalActionItem(
                 modifier = Modifier
                     .weight(1f)
@@ -741,6 +929,14 @@ private fun ActionGrid(
                 hasAlert = state.policyAlertUnreadCount > 0,
                 badgeCount = state.policyAlertUnreadCount.takeIf { it > 0 },
                 onClick = onOpenPolicyAlerts
+            )
+            MinimalActionItem(
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(UiTestTags.DASHBOARD_VISA_PATHWAY_CARD),
+                title = "Planner",
+                icon = Icons.Filled.Gavel,
+                onClick = onOpenVisaPathwayPlanner
             )
         }
     }
@@ -926,6 +1122,13 @@ private fun formatDateYear(timestamp: Long?): String {
 private fun formatDashboardDateTime(timestamp: Long): String {
     if (timestamp <= 0L) return "recently"
     val formatter = SimpleDateFormat("MMM d, h:mm a 'UTC'", Locale.US)
+    formatter.timeZone = TimeZone.getTimeZone("UTC")
+    return formatter.format(Date(timestamp))
+}
+
+private fun formatDashboardDate(timestamp: Long): String {
+    if (timestamp <= 0L) return "unknown"
+    val formatter = SimpleDateFormat("MMM d, yyyy", Locale.US)
     formatter.timeZone = TimeZone.getTimeZone("UTC")
     return formatter.format(Date(timestamp))
 }

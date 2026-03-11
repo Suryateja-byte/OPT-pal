@@ -52,10 +52,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sidekick.opt_pal.data.model.I983WorkflowType
 import com.sidekick.opt_pal.core.analytics.AnalyticsLogger
 import com.sidekick.opt_pal.data.model.ReportingObligation
 import com.sidekick.opt_pal.data.model.ReportingSource
 import com.sidekick.opt_pal.data.model.ReportingWizardEventType
+import com.sidekick.opt_pal.data.model.ReportingWizardOptRegime
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -89,6 +91,8 @@ fun ReportingRoute(
     onEditManualTask: (String) -> Unit,
     onStartWizard: () -> Unit,
     onContinueWizard: (String?, String) -> Unit,
+    onOpenI983Assistant: (String, String, I983WorkflowType) -> Unit,
+    onOpenVisaPathwayPlanner: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ReportingViewModel = viewModel(factory = ReportingViewModel.Factory)
 ) {
@@ -103,6 +107,8 @@ fun ReportingRoute(
         onEditManualTask = onEditManualTask,
         onStartWizard = onStartWizard,
         onContinueWizard = onContinueWizard,
+        onOpenI983Assistant = onOpenI983Assistant,
+        onOpenVisaPathwayPlanner = onOpenVisaPathwayPlanner,
         modifier = modifier
     )
 }
@@ -118,6 +124,8 @@ private fun ReportingScreen(
     onEditManualTask: (String) -> Unit,
     onStartWizard: () -> Unit,
     onContinueWizard: (String?, String) -> Unit,
+    onOpenI983Assistant: (String, String, I983WorkflowType) -> Unit,
+    onOpenVisaPathwayPlanner: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var isVisible by remember { mutableStateOf(false) }
@@ -231,6 +239,17 @@ private fun ReportingScreen(
                         WizardActionItem(
                             item = item,
                             onContinueWizard = { onContinueWizard(item.wizard?.id, item.obligation.id) },
+                            onOpenI983Assistant = {
+                                val employmentId = item.obligation.relatedEmploymentId
+                                if (employmentId.isNotBlank()) {
+                                    onOpenI983Assistant(
+                                        item.obligation.id,
+                                        employmentId,
+                                        item.wizard?.parsedEventType.toI983WorkflowType()
+                                    )
+                                }
+                            },
+                            onOpenVisaPathwayPlanner = onOpenVisaPathwayPlanner,
                             onMarkDone = { onToggleComplete(item.obligation) },
                             onDelete = { onDelete(item.obligation) }
                         )
@@ -301,6 +320,8 @@ private fun ReportingScreen(
 private fun WizardActionItem(
     item: ReportingActionItem,
     onContinueWizard: () -> Unit,
+    onOpenI983Assistant: () -> Unit,
+    onOpenVisaPathwayPlanner: () -> Unit,
     onMarkDone: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -338,6 +359,14 @@ private fun WizardActionItem(
                 ) {
                     Text("Continue wizard")
                 }
+                if (item.wizard?.parsedOptRegime == ReportingWizardOptRegime.STEM) {
+                    TextButton(onClick = onOpenI983Assistant) {
+                        Text("Open I-983")
+                    }
+                    TextButton(onClick = onOpenVisaPathwayPlanner) {
+                        Text("Open Planner")
+                    }
+                }
                 TextButton(onClick = onMarkDone) {
                     Text("Mark done")
                 }
@@ -346,6 +375,14 @@ private fun WizardActionItem(
                 }
             }
         }
+    }
+}
+
+private fun ReportingWizardEventType?.toI983WorkflowType(): I983WorkflowType {
+    return when (this) {
+        ReportingWizardEventType.NEW_EMPLOYER -> I983WorkflowType.NEW_EMPLOYER
+        ReportingWizardEventType.EMPLOYMENT_ENDED -> I983WorkflowType.FINAL_EVALUATION
+        ReportingWizardEventType.MATERIAL_CHANGE, null -> I983WorkflowType.MATERIAL_CHANGE
     }
 }
 

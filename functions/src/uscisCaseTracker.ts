@@ -38,6 +38,7 @@ let cachedAccessToken: {
 } | null = null;
 
 type TrackerMode = "disabled" | "sandbox" | "production";
+type TrackedFormType = "I-765" | "I-129";
 type CaseStage =
   | "RECEIVED"
   | "ACTIVE_REVIEW"
@@ -108,6 +109,7 @@ type AvailabilityResponse = {
   mode: TrackerMode;
   reason: string;
   maxTrackedCases: number;
+  supportedForms: TrackedFormType[];
 };
 
 type InterpretationResult = {
@@ -139,6 +141,7 @@ export const trackUscisCase = onCall(
     const userId = requireAuth(request.auth);
     ensureTrackerEnabled();
     const receiptNumber = normalizeReceiptNumber(request.data.receiptNumber);
+    const expectedFormType = normalizeRequestedFormType(asOptionalString(request.data.expectedFormType));
     const caseRef = trackerDocRef(userId, receiptNumber);
     const existingSnapshot = await caseRef.get();
     const existingRecord = toTrackerRecord(existingSnapshot.data());
@@ -156,7 +159,7 @@ export const trackUscisCase = onCall(
     if (otherActiveCount >= MAX_TRACKED_CASES) {
       throw new HttpsError(
         "resource-exhausted",
-        `You can track up to ${MAX_TRACKED_CASES} active I-765 cases in this version.`
+        `You can track up to ${MAX_TRACKED_CASES} active USCIS cases in this version.`
       );
     }
 
@@ -164,6 +167,7 @@ export const trackUscisCase = onCall(
       userId,
       receiptNumber,
       existingRecord,
+      expectedFormType,
       bypassCooldown: true,
       shouldNotifyOnChange: false,
     });
@@ -210,6 +214,7 @@ export const refreshUscisCase = onCall(
       userId,
       receiptNumber: caseId,
       existingRecord,
+      expectedFormType: null,
       bypassCooldown: true,
       shouldNotifyOnChange: true,
     });
@@ -327,6 +332,7 @@ export const pollTrackedUscisCases = onSchedule(
           userId,
           receiptNumber: doc.id,
           existingRecord: tracker,
+          expectedFormType: null,
           bypassCooldown: true,
           shouldNotifyOnChange: true,
         });
@@ -345,25 +351,39 @@ async function refreshTrackerRecord(input: {
   userId: string;
   receiptNumber: string;
   existingRecord: UscisCaseTrackerRecord | null;
+  expectedFormType: TrackedFormType | null;
   bypassCooldown: boolean;
   shouldNotifyOnChange: boolean;
 }): Promise<{tracker: UscisCaseTrackerRecord; statusChanged: boolean}> {
   const now = Date.now();
   try {
     const parsedCase = await fetchUscisCaseStatus(input.receiptNumber);
-    if (normalizeFormType(parsedCase.formType) != "I-765") {
+    const formType = normalizeFormType(parsedCase.formType);
+    if (!isSupportedFormType(formType)) {
       throw new HttpsError(
         "failed-precondition",
-        "Only Form I-765 receipt numbers are supported in this version."
+        "Only Form I-765 and Form I-129 receipt numbers are supported in this version."
+      );
+    }
+    if (input.expectedFormType && formType !== input.expectedFormType) {
+      throw new HttpsError(
+        "failed-precondition",
+        `USCIS returned ${formType} for this receipt number, which does not match the expected ${input.expectedFormType} case type.`
       );
     }
 
-    const normalizedStage = normalizeI765Stage(
+    const normalizedStage = normalizeCaseStage(
+      formType,
       parsedCase.officialStatusText,
       parsedCase.officialStatusDescription
     );
-    const deterministicAction = buildDeterministicRecommendedAction(normalizedStage);
-    const aiInterpretation = await interpretCaseStatus(parsedCase, normalizedStage, deterministicAction);
+    const deterministicAction = buildDeterministicRecommendedAction(formType, normalizedStage);
+    const aiInterpretation = await interpretCaseStatus(
+      parsedCase,
+      formType,
+      normalizedStage,
+      deterministicAction
+    );
     const statusHash = computeStatusHash(
       parsedCase.officialStatusText,
       parsedCase.officialStatusDescription,
@@ -373,7 +393,7 @@ async function refreshTrackerRecord(input: {
     const lastChangedAt = statusChanged || !input.existingRecord ? now : input.existingRecord.lastChangedAt;
     const tracker: UscisCaseTrackerRecord = {
       receiptNumber: input.receiptNumber,
-      formType: "I-765",
+      formType,
       normalizedStage,
       officialStatusText: parsedCase.officialStatusText,
       officialStatusDescription: parsedCase.officialStatusDescription,
@@ -389,7 +409,7 @@ async function refreshTrackerRecord(input: {
       nextPollAt: now + DEFAULT_POLL_INTERVAL_MS,
       lastError: "",
       consecutiveFailureCount: 0,
-      isTerminal: isTerminalStage(normalizedStage),
+      isTerminal: isTerminalStage(formType, normalizedStage),
       isArchived: false,
     };
 
@@ -505,18 +525,19 @@ async function getUscisAccessToken(mode: TrackerMode): Promise<string> {
 
 async function interpretCaseStatus(
   parsedCase: ParsedUscisCaseResponse,
+  formType: TrackedFormType,
   normalizedStage: CaseStage,
   deterministicAction: string
 ): Promise<InterpretationResult> {
   const prompt = `
-You rewrite official USCIS case status text into plain English for an F-1 student using Optional Practical Training.
+You rewrite official USCIS case status text into plain English for an F-1 student who may be on OPT/STEM OPT and may also be tracking an H-1B filing.
 
 You must not give legal advice. Stick to the official status. If the status is risky or unclear, classify as consult_dso_attorney.
 
 Official status text:
 - Source label: ${TRACKER_SOURCE_LABEL}
 - Source URL: ${TRACKER_SOURCE_URL}
-- Form: ${parsedCase.formType}
+- Form: ${formType}
 - Stage: ${normalizedStage}
 - Status title: ${parsedCase.officialStatusText}
 - Status description: ${parsedCase.officialStatusDescription}
@@ -720,7 +741,57 @@ function normalizeI765Stage(statusText: string, statusDescription: string): Case
   return "UNKNOWN";
 }
 
-function buildDeterministicRecommendedAction(stage: CaseStage): string {
+function normalizeI129Stage(statusText: string, statusDescription: string): CaseStage {
+  const normalized = `${statusText} ${statusDescription}`.toLowerCase();
+  if (normalized.includes("actively reviewed")) return "ACTIVE_REVIEW";
+  if (normalized.includes("request for evidence") || normalized.includes("notice of intent to deny")) {
+    return "RFE_OR_NOID";
+  }
+  if (normalized.includes("correspondence was received")) return "CORRESPONDENCE_RECEIVED";
+  if (normalized.includes("transferred")) return "TRANSFERRED";
+  if (normalized.includes("approved")) return "APPROVED";
+  if (normalized.includes("denied")) return "DENIED";
+  if (normalized.includes("rejected")) return "REJECTED";
+  if (normalized.includes("withdrawn") || normalized.includes("withdrawal")) return "WITHDRAWN";
+  if (normalized.includes("received")) return "RECEIVED";
+  return "UNKNOWN";
+}
+
+function normalizeCaseStage(formType: TrackedFormType, statusText: string, statusDescription: string): CaseStage {
+  if (formType === "I-129") {
+    return normalizeI129Stage(statusText, statusDescription);
+  }
+  return normalizeI765Stage(statusText, statusDescription);
+}
+
+function buildDeterministicRecommendedAction(formType: TrackedFormType, stage: CaseStage): string {
+  if (formType === "I-129") {
+    switch (stage) {
+    case "RECEIVED":
+      return "Keep the Form I-129 receipt notice and monitor USCIS for the next update.";
+    case "ACTIVE_REVIEW":
+      return "Employer or immigration counsel should watch for new USCIS requests or notices.";
+    case "RFE_OR_NOID":
+      return "Review the notice with the employer, immigration counsel, or your DSO before responding.";
+    case "CORRESPONDENCE_RECEIVED":
+      return "USCIS received the response. Keep monitoring for the next case movement.";
+    case "TRANSFERRED":
+      return "USCIS transferred the petition internally. Keep monitoring for the next update.";
+    case "APPROVED":
+      return "Confirm the approval notice, effective date, and any travel or start-date implications before acting.";
+    case "DENIED":
+    case "REJECTED":
+    case "WITHDRAWN":
+      return "Do not rely on this filing for status continuity. Coordinate next steps with immigration counsel or your DSO.";
+    case "BIOMETRICS":
+    case "CARD_PRODUCED":
+    case "CARD_PICKED_UP":
+    case "CARD_DELIVERED":
+    case "UNKNOWN":
+      return "Review the official USCIS text carefully and confirm anything unclear with the employer, immigration counsel, or your DSO.";
+    }
+  }
+
   switch (stage) {
   case "RECEIVED":
     return "Keep your receipt notice and monitor USCIS for the next update.";
@@ -753,7 +824,13 @@ function buildDeterministicRecommendedAction(stage: CaseStage): string {
   }
 }
 
-function isTerminalStage(stage: CaseStage): boolean {
+function isTerminalStage(formType: TrackedFormType, stage: CaseStage): boolean {
+  if (formType === "I-129") {
+    return stage === "APPROVED" ||
+      stage === "DENIED" ||
+      stage === "REJECTED" ||
+      stage === "WITHDRAWN";
+  }
   return stage === "CARD_DELIVERED" ||
     stage === "DENIED" ||
     stage === "REJECTED" ||
@@ -803,12 +880,14 @@ function buildTrackerAvailability(): AvailabilityResponse {
       mode,
       reason: "Case tracking is not enabled for this environment yet.",
       maxTrackedCases: MAX_TRACKED_CASES,
+      supportedForms: ["I-765", "I-129"],
     };
   }
   return {
     mode,
     reason: "",
     maxTrackedCases: MAX_TRACKED_CASES,
+    supportedForms: ["I-765", "I-129"],
   };
 }
 
@@ -880,7 +959,7 @@ function toTrackerRecord(value: unknown): UscisCaseTrackerRecord | null {
   }
   return {
     receiptNumber: asOptionalString(record.receiptNumber) || "",
-    formType: asOptionalString(record.formType) || "",
+    formType: normalizeFormType(asOptionalString(record.formType) || ""),
     normalizedStage: normalizeStoredStage(asOptionalString(record.normalizedStage)),
     officialStatusText: asOptionalString(record.officialStatusText) || "",
     officialStatusDescription: asOptionalString(record.officialStatusDescription) || "",
@@ -936,7 +1015,25 @@ function normalizeFormType(value: string): string {
   if (normalized.startsWith("I765")) {
     return "I-765";
   }
+  if (normalized.startsWith("I129")) {
+    return "I-129";
+  }
   return value.toUpperCase();
+}
+
+function normalizeRequestedFormType(value: string | null): TrackedFormType | null {
+  if (value == null) {
+    return null;
+  }
+  const normalized = normalizeFormType(value);
+  if (normalized === "I-765" || normalized === "I-129") {
+    return normalized;
+  }
+  throw new HttpsError("invalid-argument", "expectedFormType must be I-765 or I-129.");
+}
+
+function isSupportedFormType(value: string): value is TrackedFormType {
+  return value === "I-765" || value === "I-129";
 }
 
 function normalizeStoredStage(value: string | null): CaseStage {
@@ -1055,6 +1152,8 @@ function asNonEmptyString(value: unknown, fieldName: string): string {
 export {
   buildDeterministicRecommendedAction,
   computeStatusHash,
+  normalizeCaseStage,
+  normalizeFormType,
   normalizeI765Stage,
   normalizeReceiptNumber,
   parseUscisCasePayload,

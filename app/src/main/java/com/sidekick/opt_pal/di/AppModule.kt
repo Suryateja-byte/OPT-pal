@@ -28,14 +28,22 @@ import com.sidekick.opt_pal.data.repository.FeedbackRepository
 import com.sidekick.opt_pal.data.repository.FeedbackRepositoryImpl
 import com.sidekick.opt_pal.data.repository.FicaRefundRepository
 import com.sidekick.opt_pal.data.repository.FicaRefundRepositoryImpl
+import com.sidekick.opt_pal.data.repository.H1bDashboardRepository
+import com.sidekick.opt_pal.data.repository.H1bDashboardRepositoryImpl
+import com.sidekick.opt_pal.data.repository.I983AssistantRepository
+import com.sidekick.opt_pal.data.repository.I983AssistantRepositoryImpl
 import com.sidekick.opt_pal.data.repository.NotificationDeviceRepository
 import com.sidekick.opt_pal.data.repository.NotificationDeviceRepositoryImpl
 import com.sidekick.opt_pal.data.repository.PolicyAlertRepository
 import com.sidekick.opt_pal.data.repository.PolicyAlertRepositoryImpl
 import com.sidekick.opt_pal.data.repository.ReportingRepository
 import com.sidekick.opt_pal.data.repository.ReportingRepositoryImpl
+import com.sidekick.opt_pal.data.repository.ScenarioSimulatorRepository
+import com.sidekick.opt_pal.data.repository.ScenarioSimulatorRepositoryImpl
 import com.sidekick.opt_pal.data.repository.TravelAdvisorRepository
 import com.sidekick.opt_pal.data.repository.TravelAdvisorRepositoryImpl
+import com.sidekick.opt_pal.data.repository.VisaPathwayPlannerRepository
+import com.sidekick.opt_pal.data.repository.VisaPathwayPlannerRepositoryImpl
 import com.sidekick.opt_pal.feature.vault.ContentResolverFileNameResolver
 import com.sidekick.opt_pal.feature.vault.FileNameResolver
 
@@ -80,6 +88,10 @@ object AppModule {
     val dashboardRepository: DashboardRepository by lazy { DashboardRepositoryImpl() }
     val reportingRepository: ReportingRepository by lazy { ReportingRepositoryImpl() }
     val travelAdvisorRepository: TravelAdvisorRepository by lazy { TravelAdvisorRepositoryImpl(appContext) }
+    val i983AssistantRepository: I983AssistantRepository by lazy { I983AssistantRepositoryImpl(appContext) }
+    val visaPathwayPlannerRepository: VisaPathwayPlannerRepository by lazy { VisaPathwayPlannerRepositoryImpl(appContext) }
+    val h1bDashboardRepository: H1bDashboardRepository by lazy { H1bDashboardRepositoryImpl(appContext) }
+    val scenarioSimulatorRepository: ScenarioSimulatorRepository by lazy { ScenarioSimulatorRepositoryImpl(appContext) }
     val policyAlertRepository: PolicyAlertRepository by lazy {
         PolicyAlertRepositoryImpl(
             notificationDeviceRepository = notificationDeviceRepository

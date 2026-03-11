@@ -14,6 +14,18 @@ enum class UscisTrackerMode(val wireValue: String) {
     }
 }
 
+enum class UscisTrackedFormType(val wireValue: String, val label: String) {
+    I765("I-765", "Form I-765"),
+    I129("I-129", "Form I-129"),
+    UNKNOWN("unknown", "Unknown form");
+
+    companion object {
+        fun fromWireValue(value: String?): UscisTrackedFormType {
+            return entries.firstOrNull { it.wireValue == value } ?: UNKNOWN
+        }
+    }
+}
+
 enum class UscisCaseStage {
     RECEIVED,
     ACTIVE_REVIEW,
@@ -63,7 +75,8 @@ enum class UscisCaseConfidence(val wireValue: String) {
 data class UscisTrackerAvailability(
     val mode: String = UscisTrackerMode.DISABLED.wireValue,
     val reason: String = "",
-    val maxTrackedCases: Int = 3
+    val maxTrackedCases: Int = 3,
+    val supportedForms: List<String> = listOf(UscisTrackedFormType.I765.wireValue)
 ) {
     val parsedMode: UscisTrackerMode
         get() = UscisTrackerMode.fromWireValue(mode)
@@ -81,7 +94,7 @@ data class UscisCaseHistoryEntry(
 data class UscisCaseTracker(
     @DocumentId val id: String = "",
     val receiptNumber: String = "",
-    val formType: String = "",
+    val formType: String = UscisTrackedFormType.UNKNOWN.wireValue,
     val normalizedStage: String = UscisCaseStage.UNKNOWN.name,
     val officialStatusText: String = "",
     val officialStatusDescription: String = "",
@@ -100,6 +113,9 @@ data class UscisCaseTracker(
     val isTerminal: Boolean = false,
     val isArchived: Boolean = false
 ) {
+    val parsedFormType: UscisTrackedFormType
+        get() = UscisTrackedFormType.fromWireValue(formType)
+
     val parsedStage: UscisCaseStage
         get() = UscisCaseStage.fromValue(normalizedStage)
 

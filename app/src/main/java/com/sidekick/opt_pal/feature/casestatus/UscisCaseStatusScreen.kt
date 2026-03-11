@@ -295,12 +295,17 @@ private fun AddCaseSection(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = "Track an I-765 receipt number",
+                text = "Track a USCIS receipt number",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = "Add one USCIS receipt number at a time. Format: ABC1234567890",
+                text = buildString {
+                    append("Add one USCIS receipt number at a time. Format: ABC1234567890")
+                    if (state.availability.supportedForms.isNotEmpty()) {
+                        append(" • Supported forms: ${state.availability.supportedForms.joinToString()}")
+                    }
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -420,6 +425,7 @@ private fun SelectedCaseDetail(
                 )
             }
             DetailLine("Stage", tracker.parsedStage.toDisplayName())
+            DetailLine("Form", tracker.formType.ifBlank { "Unknown" })
             DetailLine("Recommended action", tracker.recommendedAction)
             DetailLine("Official source", TRACKER_SOURCE_LABEL)
             DetailLine("Last checked", formatUtcDateTime(tracker.lastCheckedAt))

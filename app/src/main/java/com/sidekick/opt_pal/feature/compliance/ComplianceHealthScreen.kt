@@ -111,6 +111,10 @@ fun ComplianceHealthRoute(
                 }
             )
         },
+        onOpenVisaPathwayPlanner = {
+            AnalyticsLogger.logComplianceHealthActionClicked("open_visa_pathway_planner")
+            onNavigateToRoute(AppScreen.VisaPathwayPlanner.createRoute())
+        },
         modifier = modifier
     )
 }
@@ -123,6 +127,7 @@ fun ComplianceHealthScreen(
     onOpenPolicyAlert: (String) -> Unit,
     onOpenReference: (ComplianceReference) -> Unit,
     onContactDso: () -> Unit,
+    onOpenVisaPathwayPlanner: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -219,7 +224,7 @@ fun ComplianceHealthScreen(
                         }
                     }
                     item {
-                        ScopeCard()
+                        ScopeCard(onOpenVisaPathwayPlanner = onOpenVisaPathwayPlanner)
                     }
                     item {
                         Text(
@@ -418,7 +423,7 @@ private fun PolicyOverlayCard(
 }
 
 @Composable
-private fun ScopeCard() {
+private fun ScopeCard(onOpenVisaPathwayPlanner: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -447,6 +452,9 @@ private fun ScopeCard() {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            TextButton(onClick = onOpenVisaPathwayPlanner) {
+                Text("Open Visa Planner")
+            }
         }
     }
 }

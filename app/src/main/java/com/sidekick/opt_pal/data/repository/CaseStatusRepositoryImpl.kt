@@ -8,6 +8,7 @@ import com.google.firebase.functions.ktx.functions
 import com.google.firebase.ktx.Firebase
 import com.sidekick.opt_pal.data.model.UscisCaseRefreshResult
 import com.sidekick.opt_pal.data.model.UscisCaseTracker
+import com.sidekick.opt_pal.data.model.UscisTrackedFormType
 import com.sidekick.opt_pal.data.model.UscisTrackerAvailability
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -38,14 +39,25 @@ class CaseStatusRepositoryImpl(
         UscisTrackerAvailability(
             mode = data["mode"] as? String ?: "",
             reason = data["reason"] as? String ?: "",
-            maxTrackedCases = (data["maxTrackedCases"] as? Number)?.toInt() ?: 3
+            maxTrackedCases = (data["maxTrackedCases"] as? Number)?.toInt() ?: 3,
+            supportedForms = (data["supportedForms"] as? List<*>)?.mapNotNull { it as? String }.orEmpty()
         )
     }
 
-    override suspend fun trackCase(receiptNumber: String): Result<String> = runCatching {
+    override suspend fun trackCase(
+        receiptNumber: String,
+        expectedFormType: UscisTrackedFormType?
+    ): Result<String> = runCatching {
         val response = functions
             .getHttpsCallable("trackUscisCase")
-            .call(mapOf("receiptNumber" to receiptNumber))
+            .call(
+                buildMap {
+                    put("receiptNumber", receiptNumber)
+                    if (expectedFormType != null && expectedFormType != UscisTrackedFormType.UNKNOWN) {
+                        put("expectedFormType", expectedFormType.wireValue)
+                    }
+                }
+            )
             .await()
         val data = response.data as? Map<*, *> ?: error("Invalid USCIS case tracking response.")
         data["caseId"] as? String ?: error("Missing caseId.")

@@ -68,6 +68,7 @@ import java.util.TimeZone
 fun TravelAdvisorRoute(
     onNavigateBack: () -> Unit,
     onUploadMissingDocument: () -> Unit,
+    onOpenScenarioSimulator: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: TravelAdvisorViewModel = viewModel(factory = TravelAdvisorViewModel.Factory)
 ) {
@@ -110,6 +111,7 @@ fun TravelAdvisorRoute(
         onRunAssessment = viewModel::runAssessment,
         onRefreshPolicy = viewModel::refreshPolicyBundle,
         onUploadMissingDocument = onUploadMissingDocument,
+        onOpenScenarioSimulator = onOpenScenarioSimulator,
         onOpenSource = { citation ->
             if (citation.url.isNotBlank()) {
                 AnalyticsLogger.logTravelSourceOpened(citation.id)
@@ -154,6 +156,7 @@ fun TravelAdvisorScreen(
     onRunAssessment: () -> Unit,
     onRefreshPolicy: () -> Unit,
     onUploadMissingDocument: () -> Unit,
+    onOpenScenarioSimulator: () -> Unit,
     onOpenSource: (TravelSourceCitation) -> Unit,
     onRequestI20Signature: () -> Unit,
     onContactDsoAttorney: () -> Unit,
@@ -259,6 +262,7 @@ fun TravelAdvisorScreen(
                         isRefreshingPolicy = state.isRefreshingPolicy,
                         onRunAssessment = onRunAssessment,
                         onUploadMissingDocument = onUploadMissingDocument,
+                        onOpenScenarioSimulator = onOpenScenarioSimulator,
                         onRequestI20Signature = onRequestI20Signature,
                         onContactDsoAttorney = onContactDsoAttorney
                     )
@@ -582,6 +586,7 @@ private fun ActionCard(
     isRefreshingPolicy: Boolean,
     onRunAssessment: () -> Unit,
     onUploadMissingDocument: () -> Unit,
+    onOpenScenarioSimulator: () -> Unit,
     onRequestI20Signature: () -> Unit,
     onContactDsoAttorney: () -> Unit
 ) {
@@ -610,6 +615,9 @@ private fun ActionCard(
                 OutlinedButton(onClick = onRequestI20Signature, modifier = Modifier.weight(1f)) {
                     Text("Request I-20 signature")
                 }
+            }
+            OutlinedButton(onClick = onOpenScenarioSimulator, modifier = Modifier.fillMaxWidth()) {
+                Text("Simulate This Trip")
             }
             OutlinedButton(onClick = onContactDsoAttorney, modifier = Modifier.fillMaxWidth()) {
                 Text("Contact DSO/attorney")

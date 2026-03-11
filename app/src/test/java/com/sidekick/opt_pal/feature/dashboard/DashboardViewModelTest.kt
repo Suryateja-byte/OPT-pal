@@ -6,6 +6,9 @@ import com.sidekick.opt_pal.data.model.PolicyAlertAvailability
 import com.sidekick.opt_pal.data.model.PolicyAlertCard
 import com.sidekick.opt_pal.data.model.PolicyAlertSource
 import com.sidekick.opt_pal.data.model.ReportingObligation
+import com.sidekick.opt_pal.data.model.ScenarioDraft
+import com.sidekick.opt_pal.data.model.ScenarioDraftOutcomeSummary
+import com.sidekick.opt_pal.data.model.ScenarioOutcome
 import com.sidekick.opt_pal.data.model.UserProfile
 import com.sidekick.opt_pal.testing.fakes.FakeAuthRepository
 import com.sidekick.opt_pal.testing.fakes.FakeCaseStatusRepository
@@ -14,6 +17,7 @@ import com.sidekick.opt_pal.testing.fakes.FakeDashboardRepository
 import com.sidekick.opt_pal.testing.fakes.FakeDocumentRepository
 import com.sidekick.opt_pal.testing.fakes.FakePolicyAlertRepository
 import com.sidekick.opt_pal.testing.fakes.FakeReportingRepository
+import com.sidekick.opt_pal.testing.fakes.FakeScenarioSimulatorRepository
 import com.sidekick.opt_pal.testing.rules.MainDispatcherRule
 import io.mockk.every
 import io.mockk.mockk
@@ -319,6 +323,66 @@ class DashboardViewModelTest {
         val state = viewModel.uiState.value
         assertTrue(state.complianceScore != null)
         assertTrue(complianceHealthRepository.syncRequests.isNotEmpty())
+    }
+
+    @Test
+    fun latestScenarioOutcomeAppearsWhenDraftExists() = runTest {
+        val authRepository = FakeAuthRepository()
+        val dashboardRepository = FakeDashboardRepository()
+        val reportingRepository = FakeReportingRepository()
+        val caseStatusRepository = FakeCaseStatusRepository()
+        val policyAlertRepository = FakePolicyAlertRepository()
+        val documentRepository = FakeDocumentRepository()
+        val complianceHealthRepository = FakeComplianceHealthRepository()
+        val scenarioSimulatorRepository = FakeScenarioSimulatorRepository()
+        val viewModel = DashboardViewModel(
+            authRepository,
+            dashboardRepository,
+            reportingRepository,
+            caseStatusRepository,
+            policyAlertRepository,
+            documentRepository,
+            complianceHealthRepository,
+            scenarioSimulatorRepository = scenarioSimulatorRepository
+        ) { date(2026, 3, 10) }
+
+        authRepository.emitUser(mockUser("user-7"))
+        authRepository.emitProfile(
+            "user-7",
+            UserProfile(uid = "user-7", email = "scenario@example.com", optType = "initial", optStartDate = date(2026, 1, 1))
+        )
+        scenarioSimulatorRepository.setDrafts(
+            "user-7",
+            listOf(
+                ScenarioDraft(
+                    id = "draft-older",
+                    name = "Older draft",
+                    updatedAt = 100L,
+                    lastOutcome = ScenarioDraftOutcomeSummary(
+                        outcome = ScenarioOutcome.ACTION_REQUIRED.name,
+                        headline = "Older scenario result",
+                        computedAt = 100L
+                    )
+                ),
+                ScenarioDraft(
+                    id = "draft-latest",
+                    name = "Cap-gap fallback",
+                    updatedAt = 200L,
+                    lastOutcome = ScenarioDraftOutcomeSummary(
+                        outcome = ScenarioOutcome.HIGH_RISK.name,
+                        headline = "Travel during pending COS can break cap-gap continuity.",
+                        computedAt = 200L
+                    )
+                )
+            )
+        )
+
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("Cap-gap fallback", state.latestScenarioDraftName)
+        assertEquals("High risk", state.latestScenarioOutcomeLabel)
+        assertEquals("Travel during pending COS can break cap-gap continuity.", state.latestScenarioHeadline)
     }
 
     private fun mockUser(uid: String): FirebaseUser {

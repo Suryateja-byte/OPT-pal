@@ -11,6 +11,8 @@ import com.sidekick.opt_pal.core.calculations.calculateUnemploymentForecast
 import com.sidekick.opt_pal.core.calculations.utcStartOfDay
 import com.sidekick.opt_pal.core.compliance.ComplianceScoreEngine
 import com.sidekick.opt_pal.core.compliance.buildComplianceEvidenceSnapshot
+import com.sidekick.opt_pal.core.pathway.VisaPathwayEngine
+import com.sidekick.opt_pal.core.pathway.buildVisaPathwayEvidenceSnapshot
 import com.sidekick.opt_pal.core.unemployment.UnemploymentAlertCoordinator
 import com.sidekick.opt_pal.data.model.ComplianceHealthAvailability
 import com.sidekick.opt_pal.data.model.ComplianceHealthScore
@@ -21,16 +23,22 @@ import com.sidekick.opt_pal.data.model.PolicyAlertCard
 import com.sidekick.opt_pal.data.model.PolicyAlertSeverity
 import com.sidekick.opt_pal.data.model.PolicyAlertState
 import com.sidekick.opt_pal.data.model.ReportingObligation
+import com.sidekick.opt_pal.data.model.ScenarioDraft
 import com.sidekick.opt_pal.data.model.UscisCaseStage
 import com.sidekick.opt_pal.data.model.UscisCaseSummary
 import com.sidekick.opt_pal.data.model.UscisCaseTracker
 import com.sidekick.opt_pal.data.model.UserProfile
+import com.sidekick.opt_pal.data.model.VisaPathwayPlannerBundle
+import com.sidekick.opt_pal.data.model.VisaPathwayPlannerSummary
 import com.sidekick.opt_pal.data.repository.AuthRepository
 import com.sidekick.opt_pal.data.repository.CaseStatusRepository
 import com.sidekick.opt_pal.data.repository.ComplianceHealthRepository
 import com.sidekick.opt_pal.data.repository.DashboardRepository
+import com.sidekick.opt_pal.data.repository.I983AssistantRepository
 import com.sidekick.opt_pal.data.repository.PolicyAlertRepository
 import com.sidekick.opt_pal.data.repository.ReportingRepository
+import com.sidekick.opt_pal.data.repository.ScenarioSimulatorRepository
+import com.sidekick.opt_pal.data.repository.VisaPathwayPlannerRepository
 import com.sidekick.opt_pal.di.AppModule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -54,18 +62,26 @@ class DashboardViewModel(
     private val documentRepository: com.sidekick.opt_pal.data.repository.DocumentRepository,
     private val complianceHealthRepository: ComplianceHealthRepository,
     private val unemploymentAlertCoordinator: UnemploymentAlertCoordinator? = null,
+    private val visaPathwayPlannerRepository: VisaPathwayPlannerRepository? = null,
+    private val i983AssistantRepository: I983AssistantRepository? = null,
+    private val scenarioSimulatorRepository: ScenarioSimulatorRepository? = null,
     private val timeProvider: () -> Long = { System.currentTimeMillis() }
 ) : ViewModel() {
 
     private val currentUid = MutableStateFlow<String?>(null)
     private val policyAlertAvailability = MutableStateFlow(PolicyAlertAvailability())
     private val complianceAvailability = MutableStateFlow(ComplianceHealthAvailability())
+    private val visaPathwayEntitlement = MutableStateFlow(false)
+    private val visaPathwayBundle = MutableStateFlow<VisaPathwayPlannerBundle?>(visaPathwayPlannerRepository?.getCachedBundle())
     private val complianceScoreEngine = ComplianceScoreEngine(timeProvider)
+    private val visaPathwayEngine = VisaPathwayEngine()
+    private var lastPlannerEntitlementFlag: Boolean? = null
 
     val uiState: StateFlow<DashboardUiState> = authRepository.getAuthState()
         .flatMapLatest { user ->
             currentUid.value = user?.uid
             if (user == null) {
+                lastPlannerEntitlementFlag = null
                 flowOf(DashboardUiState(isLoading = false))
             } else {
                 viewModelScope.launch {
@@ -86,6 +102,13 @@ class DashboardViewModel(
                             )
                         }
                 }
+                if (visaPathwayPlannerRepository != null) {
+                    viewModelScope.launch {
+                        visaPathwayBundle.value = visaPathwayPlannerRepository.getCachedBundle()
+                        visaPathwayPlannerRepository.refreshBundle()
+                            .onSuccess { visaPathwayBundle.value = it }
+                    }
+                }
                 val dashboardCoreDependencies = combine(
                     authRepository.getUserProfile(user.uid),
                     dashboardRepository.getEmployments(user.uid),
@@ -103,24 +126,47 @@ class DashboardViewModel(
                 }
                 val dashboardDependencies = combine(
                     dashboardCoreDependencies,
-                    policyAlertRepository.observePublishedAlerts()
-                ) { core, policyAlerts ->
+                    policyAlertRepository.observePublishedAlerts(),
+                    if (visaPathwayPlannerRepository != null) visaPathwayPlannerRepository.observeProfile(user.uid) else flowOf(null),
+                    if (i983AssistantRepository != null) i983AssistantRepository.observeDrafts(user.uid) else flowOf(emptyList()),
+                    if (scenarioSimulatorRepository != null) scenarioSimulatorRepository.observeDrafts(user.uid) else flowOf(emptyList())
+                ) { core, policyAlerts, plannerProfile, i983Drafts, scenarioDrafts ->
                     DashboardDependencies(
                         profile = core.profile,
                         employment = core.employment,
                         reporting = core.reporting,
                         trackedCases = core.trackedCases,
                         documents = core.documents,
-                        policyAlerts = policyAlerts
+                        policyAlerts = policyAlerts,
+                        plannerProfile = plannerProfile,
+                        i983Drafts = i983Drafts,
+                        scenarioDrafts = scenarioDrafts
                     )
                 }
-                combine(
+                val dashboardPolicyDependencies = combine(
                     dashboardDependencies,
                     policyAlertAvailability,
                     complianceAvailability,
                     policyAlertRepository.observeAlertStates(user.uid)
                 ) { dependencies, alertAvailability, complianceHealthAvailability, policyStates ->
+                    DashboardPolicyDependencies(
+                        dependencies = dependencies,
+                        alertAvailability = alertAvailability,
+                        complianceAvailability = complianceHealthAvailability,
+                        policyStates = policyStates
+                    )
+                }
+                combine(
+                    dashboardPolicyDependencies,
+                    visaPathwayEntitlement,
+                    visaPathwayBundle
+                ) { combinedDependencies, plannerEnabled, plannerBundle ->
+                    val dependencies = combinedDependencies.dependencies
+                    val alertAvailability = combinedDependencies.alertAvailability
+                    val complianceHealthAvailability = combinedDependencies.complianceAvailability
+                    val policyStates = combinedDependencies.policyStates
                     val now = timeProvider()
+                    maybeResolvePlannerEntitlement(dependencies.profile?.visaPathwayPlannerEnabled)
                     val complianceScore = if (complianceHealthAvailability.isEnabled) {
                         val evidence = buildComplianceEvidenceSnapshot(
                             profile = dependencies.profile,
@@ -145,6 +191,35 @@ class DashboardViewModel(
                     } else {
                         null
                     }
+                    val visaPathwaySummary = if (plannerEnabled && plannerBundle != null) {
+                        val snapshot = buildVisaPathwayEvidenceSnapshot(
+                            profile = dependencies.profile,
+                            plannerProfile = dependencies.plannerProfile,
+                            employments = dependencies.employment,
+                            reportingObligations = dependencies.reporting,
+                            documents = dependencies.documents,
+                            i983Drafts = dependencies.i983Drafts,
+                            trackedCases = dependencies.trackedCases,
+                            policyAlerts = dependencies.policyAlerts,
+                            policyStates = policyStates,
+                            bundle = plannerBundle
+                        )
+                        visaPathwayEngine.buildSummary(
+                            assessments = visaPathwayEngine.assess(
+                                evidence = snapshot,
+                                bundle = plannerBundle,
+                                now = now
+                            ),
+                            preferredPathwayId = dependencies.plannerProfile?.parsedPreferredPathwayId
+                        )
+                    } else {
+                        null
+                    }
+                    val latestScenarioDraft = dependencies.scenarioDrafts
+                        .filterNot { it.isArchived }
+                        .maxByOrNull { draft ->
+                            draft.lastOutcome?.computedAt ?: draft.lastRunAt ?: draft.updatedAt
+                        }
                     buildDashboardState(
                         profile = dependencies.profile,
                         employment = dependencies.employment,
@@ -154,6 +229,8 @@ class DashboardViewModel(
                         policyAlertAvailability = alertAvailability,
                         policyStates = policyStates,
                         complianceScore = complianceScore,
+                        visaPathwaySummary = visaPathwaySummary,
+                        latestScenarioDraft = latestScenarioDraft,
                         now = now
                     )
                 }.onStart { emit(DashboardUiState(isLoading = true)) }
@@ -206,9 +283,22 @@ class DashboardViewModel(
                     AppModule.policyAlertRepository,
                     AppModule.documentRepository,
                     AppModule.complianceHealthRepository,
-                    AppModule.unemploymentAlertCoordinator
+                    AppModule.unemploymentAlertCoordinator,
+                    visaPathwayPlannerRepository = AppModule.visaPathwayPlannerRepository,
+                    i983AssistantRepository = AppModule.i983AssistantRepository,
+                    scenarioSimulatorRepository = AppModule.scenarioSimulatorRepository
                 )
             }
+        }
+    }
+
+    private fun maybeResolvePlannerEntitlement(userFlag: Boolean?) {
+        if (visaPathwayPlannerRepository == null || userFlag == lastPlannerEntitlementFlag) return
+        lastPlannerEntitlementFlag = userFlag
+        viewModelScope.launch {
+            visaPathwayEntitlement.value = visaPathwayPlannerRepository.resolveEntitlement(userFlag)
+                .getOrNull()
+                ?.isEnabled == true
         }
     }
 }
@@ -227,7 +317,17 @@ private data class DashboardDependencies(
     val reporting: List<ReportingObligation>,
     val trackedCases: List<UscisCaseTracker>,
     val documents: List<DocumentMetadata>,
-    val policyAlerts: List<PolicyAlertCard>
+    val policyAlerts: List<PolicyAlertCard>,
+    val plannerProfile: com.sidekick.opt_pal.data.model.VisaPathwayProfile?,
+    val i983Drafts: List<com.sidekick.opt_pal.data.model.I983Draft>,
+    val scenarioDrafts: List<ScenarioDraft>
+)
+
+private data class DashboardPolicyDependencies(
+    val dependencies: DashboardDependencies,
+    val alertAvailability: PolicyAlertAvailability,
+    val complianceAvailability: ComplianceHealthAvailability,
+    val policyStates: List<PolicyAlertState>
 )
 
 private fun buildDashboardState(
@@ -239,6 +339,8 @@ private fun buildDashboardState(
     policyAlertAvailability: PolicyAlertAvailability,
     policyStates: List<PolicyAlertState>,
     complianceScore: ComplianceHealthScore?,
+    visaPathwaySummary: VisaPathwayPlannerSummary?,
+    latestScenarioDraft: ScenarioDraft?,
     now: Long
 ): DashboardUiState {
     val sortedHistory = employment.sortedByDescending { it.startDate }
@@ -279,6 +381,7 @@ private fun buildDashboardState(
         UnemploymentDataQualityState.NEEDS_STEM_CYCLE_START -> "Add original OPT start date"
         UnemploymentDataQualityState.READY -> null
     }
+    val latestScenarioOutcome = latestScenarioDraft?.lastOutcome
     return DashboardUiState(
         isLoading = false,
         displayName = profile?.email?.substringBefore('@')?.replaceFirstChar { it.uppercase() } ?: "Traveler",
@@ -304,6 +407,11 @@ private fun buildDashboardState(
         unemploymentTrackingStartDate = profile?.unemploymentTrackingStartDate,
         uscisCaseSummary = uscisSummary,
         complianceScore = complianceScore,
+        visaPathwaySummary = visaPathwaySummary,
+        latestScenarioDraftName = latestScenarioDraft?.name?.ifBlank { null },
+        latestScenarioOutcomeLabel = latestScenarioOutcome?.parsedOutcome?.label,
+        latestScenarioHeadline = latestScenarioOutcome?.headline?.ifBlank { null },
+        latestScenarioConfidenceLabel = latestScenarioOutcome?.parsedConfidence?.label,
         policyAlertUnreadCount = unreadPolicyCount,
         latestCriticalPolicyAlertTitle = latestCriticalPolicyAlert?.title.takeIf { policyAlertAvailability.isEnabled },
         latestCriticalPolicyAlertId = latestCriticalPolicyAlert?.id.takeIf { policyAlertAvailability.isEnabled }
@@ -394,6 +502,11 @@ data class DashboardUiState(
     val unemploymentTrackingStartDate: Long? = null,
     val uscisCaseSummary: UscisCaseSummary? = null,
     val complianceScore: ComplianceHealthScore? = null,
+    val visaPathwaySummary: VisaPathwayPlannerSummary? = null,
+    val latestScenarioDraftName: String? = null,
+    val latestScenarioOutcomeLabel: String? = null,
+    val latestScenarioHeadline: String? = null,
+    val latestScenarioConfidenceLabel: String? = null,
     val policyAlertUnreadCount: Int = 0,
     val latestCriticalPolicyAlertTitle: String? = null,
     val latestCriticalPolicyAlertId: String? = null,

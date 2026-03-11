@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,14 +42,17 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.sidekick.opt_pal.core.documents.SecureDocumentShareHelper
 import com.sidekick.opt_pal.data.model.DocumentMetadata
 import com.sidekick.opt_pal.data.repository.DocumentRepository
+import kotlinx.coroutines.launch
 import com.sidekick.opt_pal.di.AppModule
 import kotlinx.coroutines.flow.first
 import java.io.File
 
 private data class SecureDocumentViewerState(
     val isLoading: Boolean = true,
+    val document: DocumentMetadata? = null,
     val fileName: String = "",
     val contentType: String = "",
     val imageBytes: ByteArray? = null,
@@ -67,6 +71,7 @@ fun SecureDocumentViewerRoute(
     val lifecycleOwner = LocalLifecycleOwner.current
     var reloadKey by remember { mutableIntStateOf(0) }
     var state by remember { mutableStateOf(SecureDocumentViewerState()) }
+    val shareHelper = remember { SecureDocumentShareHelper(context, documentRepository) }
 
     DisposableEffect(lifecycleOwner, state.pdfFile) {
         val observer = LifecycleEventObserver { _, event ->
@@ -105,6 +110,7 @@ fun SecureDocumentViewerRoute(
                     tempFile.writeBytes(content.bytes)
                     state = SecureDocumentViewerState(
                         isLoading = false,
+                        document = document,
                         fileName = document.displayName(),
                         contentType = content.contentType,
                         pdfFile = tempFile
@@ -112,6 +118,7 @@ fun SecureDocumentViewerRoute(
                 } else {
                     state = SecureDocumentViewerState(
                         isLoading = false,
+                        document = document,
                         fileName = document.displayName(),
                         contentType = content.contentType,
                         imageBytes = content.bytes
@@ -149,6 +156,30 @@ fun SecureDocumentViewerRoute(
                         contentDescription = "Back",
                         tint = MaterialTheme.colorScheme.onSurface
                     )
+                }
+                if (state.document != null) {
+                    IconButton(
+                        onClick = {
+                            state.document?.let { document ->
+                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                                    shareHelper.share(document)
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(40.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                MaterialTheme.shapes.small
+                            )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Share,
+                            contentDescription = "Share",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
         }

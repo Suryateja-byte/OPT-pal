@@ -5,18 +5,68 @@ sealed class AppScreen(val route: String) {
     data object SignUp : AppScreen("signup")
     data object Setup : AppScreen("setup")
     data object Dashboard : AppScreen("dashboard")
+    data object H1bDashboard : AppScreen("h1bDashboard")
+    data object ScenarioSimulator : AppScreen("scenarioSimulator?templateId={templateId}&draftId={draftId}") {
+        const val TEMPLATE_ID_ARG = "templateId"
+        const val DRAFT_ID_ARG = "draftId"
+
+        fun createRoute(templateId: String? = null, draftId: String? = null): String {
+            val params = buildList {
+                if (!templateId.isNullOrBlank()) add("templateId=$templateId")
+                if (!draftId.isNullOrBlank()) add("draftId=$draftId")
+            }
+            return if (params.isEmpty()) {
+                "scenarioSimulator"
+            } else {
+                "scenarioSimulator?${params.joinToString("&")}"
+            }
+        }
+    }
     data object TaxRefund : AppScreen("taxRefund")
     data object ComplianceScore : AppScreen("complianceScore")
     data object TravelAdvisor : AppScreen("travelAdvisor")
-    data object PolicyAlerts : AppScreen("policyAlerts?alertId={alertId}") {
-        const val ALERT_ID_ARG = "alertId"
+    data object VisaPathwayPlanner : AppScreen("visaPathwayPlanner?pathwayId={pathwayId}") {
+        const val PATHWAY_ID_ARG = "pathwayId"
 
-        fun createRoute(alertId: String? = null): String {
-            return if (alertId.isNullOrBlank()) {
-                "policyAlerts"
+        fun createRoute(pathwayId: String? = null): String {
+            return if (pathwayId.isNullOrBlank()) {
+                "visaPathwayPlanner"
             } else {
-                "policyAlerts?alertId=$alertId"
+                "visaPathwayPlanner?pathwayId=$pathwayId"
             }
+        }
+    }
+    data object I983Assistant : AppScreen("i983Assistant?draftId={draftId}&obligationId={obligationId}&employmentId={employmentId}&workflowType={workflowType}") {
+        const val DRAFT_ID_ARG = "draftId"
+        const val OBLIGATION_ID_ARG = "obligationId"
+        const val EMPLOYMENT_ID_ARG = "employmentId"
+        const val WORKFLOW_TYPE_ARG = "workflowType"
+
+        fun createRoute(
+            draftId: String? = null,
+            obligationId: String? = null,
+            employmentId: String? = null,
+            workflowType: String? = null
+        ): String {
+            val params = buildList {
+                if (!draftId.isNullOrBlank()) add("draftId=$draftId")
+                if (!obligationId.isNullOrBlank()) add("obligationId=$obligationId")
+                if (!employmentId.isNullOrBlank()) add("employmentId=$employmentId")
+                if (!workflowType.isNullOrBlank()) add("workflowType=$workflowType")
+            }
+            return if (params.isEmpty()) "i983Assistant" else "i983Assistant?${params.joinToString("&")}"
+        }
+    }
+    data object PolicyAlerts : AppScreen("policyAlerts?alertId={alertId}&filter={filter}") {
+        const val ALERT_ID_ARG = "alertId"
+        const val FILTER_ARG = "filter"
+
+        fun createRoute(alertId: String? = null, filter: String? = null): String {
+            val params = buildList {
+                if (!alertId.isNullOrBlank()) add("alertId=$alertId")
+                if (!filter.isNullOrBlank()) add("filter=$filter")
+            }
+            return if (params.isEmpty()) "policyAlerts" else "policyAlerts?${params.joinToString("&")}"
         }
     }
     data object CaseStatus : AppScreen("caseStatus?caseId={caseId}") {

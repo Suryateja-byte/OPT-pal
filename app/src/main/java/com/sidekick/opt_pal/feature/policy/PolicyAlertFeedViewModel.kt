@@ -84,12 +84,14 @@ data class PolicyAlertFeedUiState(
 class PolicyAlertFeedViewModel(
     private val authRepository: AuthRepository,
     private val policyAlertRepository: PolicyAlertRepository,
-    private val selectedAlertIdArg: String?
+    private val selectedAlertIdArg: String?,
+    private val initialFilterArg: String?
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
         PolicyAlertFeedUiState(
-            policyNotificationsEnabled = policyAlertRepository.isNotificationPreferenceEnabled()
+            policyNotificationsEnabled = policyAlertRepository.isNotificationPreferenceEnabled(),
+            selectedFilter = initialFilterArg.toFilter()
         )
     )
     val uiState = _uiState.asStateFlow()
@@ -224,16 +226,28 @@ class PolicyAlertFeedViewModel(
     }
 
     companion object {
-        fun provideFactory(selectedAlertId: String?): ViewModelProvider.Factory =
+        fun provideFactory(selectedAlertId: String?, initialFilter: String?): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     return PolicyAlertFeedViewModel(
                         authRepository = AppModule.authRepository,
                         policyAlertRepository = AppModule.policyAlertRepository,
-                        selectedAlertIdArg = selectedAlertId
+                        selectedAlertIdArg = selectedAlertId,
+                        initialFilterArg = initialFilter
                     ) as T
                 }
             }
+    }
+}
+
+private fun String?.toFilter(): PolicyAlertFilter {
+    return when (this?.lowercase()) {
+        "critical" -> PolicyAlertFilter.CRITICAL
+        "travel" -> PolicyAlertFilter.TRAVEL
+        "employment" -> PolicyAlertFilter.EMPLOYMENT
+        "reporting" -> PolicyAlertFilter.REPORTING
+        "applications" -> PolicyAlertFilter.APPLICATIONS
+        else -> PolicyAlertFilter.ALL
     }
 }
