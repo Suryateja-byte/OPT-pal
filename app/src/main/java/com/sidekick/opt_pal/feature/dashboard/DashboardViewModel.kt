@@ -22,6 +22,7 @@ import com.sidekick.opt_pal.data.model.PolicyAlertAvailability
 import com.sidekick.opt_pal.data.model.PolicyAlertCard
 import com.sidekick.opt_pal.data.model.PolicyAlertSeverity
 import com.sidekick.opt_pal.data.model.PolicyAlertState
+import com.sidekick.opt_pal.data.model.PeerDataSnapshot
 import com.sidekick.opt_pal.data.model.ReportingObligation
 import com.sidekick.opt_pal.data.model.ScenarioDraft
 import com.sidekick.opt_pal.data.model.UscisCaseStage
@@ -35,6 +36,7 @@ import com.sidekick.opt_pal.data.repository.CaseStatusRepository
 import com.sidekick.opt_pal.data.repository.ComplianceHealthRepository
 import com.sidekick.opt_pal.data.repository.DashboardRepository
 import com.sidekick.opt_pal.data.repository.I983AssistantRepository
+import com.sidekick.opt_pal.data.repository.PeerDataRepository
 import com.sidekick.opt_pal.data.repository.PolicyAlertRepository
 import com.sidekick.opt_pal.data.repository.ReportingRepository
 import com.sidekick.opt_pal.data.repository.ScenarioSimulatorRepository
@@ -65,6 +67,7 @@ class DashboardViewModel(
     private val visaPathwayPlannerRepository: VisaPathwayPlannerRepository? = null,
     private val i983AssistantRepository: I983AssistantRepository? = null,
     private val scenarioSimulatorRepository: ScenarioSimulatorRepository? = null,
+    private val peerDataRepository: PeerDataRepository? = null,
     private val timeProvider: () -> Long = { System.currentTimeMillis() }
 ) : ViewModel() {
 
@@ -72,16 +75,23 @@ class DashboardViewModel(
     private val policyAlertAvailability = MutableStateFlow(PolicyAlertAvailability())
     private val complianceAvailability = MutableStateFlow(ComplianceHealthAvailability())
     private val visaPathwayEntitlement = MutableStateFlow(false)
+    private val peerDataEntitlement = MutableStateFlow(false)
     private val visaPathwayBundle = MutableStateFlow<VisaPathwayPlannerBundle?>(visaPathwayPlannerRepository?.getCachedBundle())
+    private val peerDataSnapshot = MutableStateFlow<PeerDataSnapshot?>(peerDataRepository?.getCachedSnapshot())
     private val complianceScoreEngine = ComplianceScoreEngine(timeProvider)
     private val visaPathwayEngine = VisaPathwayEngine()
     private var lastPlannerEntitlementFlag: Boolean? = null
+    private var lastPeerDataEntitlementFlag: Boolean? = null
 
     val uiState: StateFlow<DashboardUiState> = authRepository.getAuthState()
         .flatMapLatest { user ->
             currentUid.value = user?.uid
             if (user == null) {
                 lastPlannerEntitlementFlag = null
+                lastPeerDataEntitlementFlag = null
+                visaPathwayEntitlement.value = false
+                peerDataEntitlement.value = false
+                peerDataSnapshot.value = peerDataRepository?.getCachedSnapshot()
                 flowOf(DashboardUiState(isLoading = false))
             } else {
                 viewModelScope.launch {
@@ -159,14 +169,17 @@ class DashboardViewModel(
                 combine(
                     dashboardPolicyDependencies,
                     visaPathwayEntitlement,
-                    visaPathwayBundle
-                ) { combinedDependencies, plannerEnabled, plannerBundle ->
+                    visaPathwayBundle,
+                    peerDataEntitlement,
+                    peerDataSnapshot
+                ) { combinedDependencies, plannerEnabled, plannerBundle, peerEnabled, latestPeerDataSnapshot ->
                     val dependencies = combinedDependencies.dependencies
                     val alertAvailability = combinedDependencies.alertAvailability
                     val complianceHealthAvailability = combinedDependencies.complianceAvailability
                     val policyStates = combinedDependencies.policyStates
                     val now = timeProvider()
                     maybeResolvePlannerEntitlement(dependencies.profile?.visaPathwayPlannerEnabled)
+                    maybeResolvePeerDataEntitlement(dependencies.profile?.peerDataEnabled)
                     val complianceScore = if (complianceHealthAvailability.isEnabled) {
                         val evidence = buildComplianceEvidenceSnapshot(
                             profile = dependencies.profile,
@@ -230,6 +243,7 @@ class DashboardViewModel(
                         policyStates = policyStates,
                         complianceScore = complianceScore,
                         visaPathwaySummary = visaPathwaySummary,
+                        peerDataSnapshot = latestPeerDataSnapshot.takeIf { peerEnabled },
                         latestScenarioDraft = latestScenarioDraft,
                         now = now
                     )
@@ -286,7 +300,8 @@ class DashboardViewModel(
                     AppModule.unemploymentAlertCoordinator,
                     visaPathwayPlannerRepository = AppModule.visaPathwayPlannerRepository,
                     i983AssistantRepository = AppModule.i983AssistantRepository,
-                    scenarioSimulatorRepository = AppModule.scenarioSimulatorRepository
+                    scenarioSimulatorRepository = AppModule.scenarioSimulatorRepository,
+                    peerDataRepository = AppModule.peerDataRepository
                 )
             }
         }
@@ -299,6 +314,24 @@ class DashboardViewModel(
             visaPathwayEntitlement.value = visaPathwayPlannerRepository.resolveEntitlement(userFlag)
                 .getOrNull()
                 ?.isEnabled == true
+        }
+    }
+
+    private fun maybeResolvePeerDataEntitlement(userFlag: Boolean?) {
+        if (peerDataRepository == null || userFlag == lastPeerDataEntitlementFlag) return
+        lastPeerDataEntitlementFlag = userFlag
+        viewModelScope.launch {
+            val enabled = peerDataRepository.resolveEntitlement(userFlag)
+                .getOrNull()
+                ?.isEnabled == true
+            peerDataEntitlement.value = enabled
+            if (enabled) {
+                peerDataSnapshot.value = peerDataRepository.getCachedSnapshot()
+                peerDataRepository.getPeerSnapshot()
+                    .onSuccess { snapshot -> peerDataSnapshot.value = snapshot }
+            } else {
+                peerDataSnapshot.value = null
+            }
         }
     }
 }
@@ -340,6 +373,7 @@ private fun buildDashboardState(
     policyStates: List<PolicyAlertState>,
     complianceScore: ComplianceHealthScore?,
     visaPathwaySummary: VisaPathwayPlannerSummary?,
+    peerDataSnapshot: PeerDataSnapshot?,
     latestScenarioDraft: ScenarioDraft?,
     now: Long
 ): DashboardUiState {
@@ -381,6 +415,19 @@ private fun buildDashboardState(
         UnemploymentDataQualityState.NEEDS_STEM_CYCLE_START -> "Add original OPT start date"
         UnemploymentDataQualityState.READY -> null
     }
+    val primaryPeerCard = peerDataSnapshot?.primaryBenchmarkCard
+    val fallbackPeerCard = peerDataSnapshot?.primaryOfficialCard
+    val peerCardTitle = primaryPeerCard?.title ?: fallbackPeerCard?.title
+    val peerCardSummary = primaryPeerCard?.summary ?: fallbackPeerCard?.summary
+    val peerCardSourceLabel = primaryPeerCard?.parsedSource?.label ?: fallbackPeerCard?.parsedSource?.label
+    val peerCardSampleSizeBand = primaryPeerCard?.sampleSizeBand ?: fallbackPeerCard?.sampleSizeBand
+    val peerCardCohortBasis = primaryPeerCard?.cohortBasis ?: fallbackPeerCard?.cohortBasis
+    val peerCardModeLabel = when {
+        peerDataSnapshot == null -> null
+        primaryPeerCard != null -> "Personalized cohort"
+        peerDataSnapshot.notEnoughSimilarPeers -> "Official-only fallback"
+        else -> "Official context"
+    }
     val latestScenarioOutcome = latestScenarioDraft?.lastOutcome
     return DashboardUiState(
         isLoading = false,
@@ -408,6 +455,12 @@ private fun buildDashboardState(
         uscisCaseSummary = uscisSummary,
         complianceScore = complianceScore,
         visaPathwaySummary = visaPathwaySummary,
+        peerDataTitle = peerCardTitle,
+        peerDataSummary = peerCardSummary,
+        peerDataSourceLabel = peerCardSourceLabel,
+        peerDataSampleSizeBand = peerCardSampleSizeBand,
+        peerDataCohortBasis = peerCardCohortBasis,
+        peerDataModeLabel = peerCardModeLabel,
         latestScenarioDraftName = latestScenarioDraft?.name?.ifBlank { null },
         latestScenarioOutcomeLabel = latestScenarioOutcome?.parsedOutcome?.label,
         latestScenarioHeadline = latestScenarioOutcome?.headline?.ifBlank { null },
@@ -503,6 +556,12 @@ data class DashboardUiState(
     val uscisCaseSummary: UscisCaseSummary? = null,
     val complianceScore: ComplianceHealthScore? = null,
     val visaPathwaySummary: VisaPathwayPlannerSummary? = null,
+    val peerDataTitle: String? = null,
+    val peerDataSummary: String? = null,
+    val peerDataSourceLabel: String? = null,
+    val peerDataSampleSizeBand: String? = null,
+    val peerDataCohortBasis: String? = null,
+    val peerDataModeLabel: String? = null,
     val latestScenarioDraftName: String? = null,
     val latestScenarioOutcomeLabel: String? = null,
     val latestScenarioHeadline: String? = null,

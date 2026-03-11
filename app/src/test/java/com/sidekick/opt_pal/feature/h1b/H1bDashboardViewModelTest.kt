@@ -121,6 +121,7 @@ class H1bDashboardViewModelTest {
             H1bWorkflowStage.NOT_STARTED.wireValue,
             h1bDashboardRepository.savedTimelineStates.last().second.workflowStage
         )
+        assertTrue(h1bDashboardRepository.savedTimelineStates.last().second.receiptReceivedAt != null)
     }
 
     private fun mockUser(uid: String): FirebaseUser {

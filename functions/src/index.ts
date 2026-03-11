@@ -1317,6 +1317,13 @@ export {
   searchH1bEmployerHistory,
   syncH1bEmployerDataHub,
 } from "./h1bDashboard";
+export {
+  getPeerDataBundle,
+  getPeerDataSnapshot,
+  rebuildPeerDataSnapshots,
+  refreshPeerDataOfficialBaselines,
+  savePeerDataParticipation,
+} from "./peerData";
 export {getScenarioSimulatorBundle} from "./scenarioSimulator";
 export {getVisaPathwayPlannerBundle} from "./visaPathwayPlanner";
 export {

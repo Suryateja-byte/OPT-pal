@@ -35,6 +35,11 @@ import com.sidekick.opt_pal.data.model.I983EntitlementState
 import com.sidekick.opt_pal.data.model.I983ExportResult
 import com.sidekick.opt_pal.data.model.I983NarrativeDraft
 import com.sidekick.opt_pal.data.model.I983PolicyBundle
+import com.sidekick.opt_pal.data.model.PeerDataBundle
+import com.sidekick.opt_pal.data.model.PeerDataEntitlementSource
+import com.sidekick.opt_pal.data.model.PeerDataEntitlementState
+import com.sidekick.opt_pal.data.model.PeerDataParticipationSettings
+import com.sidekick.opt_pal.data.model.PeerDataSnapshot
 import com.sidekick.opt_pal.data.model.PolicyAlertAvailability
 import com.sidekick.opt_pal.data.model.PolicyAlertCard
 import com.sidekick.opt_pal.data.model.PolicyAlertState
@@ -71,6 +76,7 @@ import com.sidekick.opt_pal.data.repository.H1bDashboardRepository
 import com.sidekick.opt_pal.data.repository.I983AssistantRepository
 import com.sidekick.opt_pal.data.repository.NotificationDeviceChannels
 import com.sidekick.opt_pal.data.repository.NotificationDeviceRepository
+import com.sidekick.opt_pal.data.repository.PeerDataRepository
 import com.sidekick.opt_pal.data.repository.PolicyAlertRepository
 import com.sidekick.opt_pal.data.repository.ReportingRepository
 import com.sidekick.opt_pal.data.repository.ScenarioSimulatorRepository
@@ -797,6 +803,60 @@ class FakeH1bDashboardRepository : H1bDashboardRepository {
 
     fun setEvidence(uid: String, evidence: H1bEvidence?) {
         evidenceStates.getOrPut(uid) { MutableStateFlow(null) }.value = evidence
+    }
+}
+
+class FakePeerDataRepository : PeerDataRepository {
+    private val settings = mutableMapOf<String, MutableStateFlow<PeerDataParticipationSettings>>()
+    var entitlementResult: Result<PeerDataEntitlementState> = Result.success(
+        PeerDataEntitlementState(
+            isEnabled = true,
+            source = PeerDataEntitlementSource.OPEN_BETA,
+            message = "Enabled for tests."
+        )
+    )
+    var cachedPeerDataBundle: PeerDataBundle? = null
+    var refreshResult: Result<PeerDataBundle> =
+        Result.failure(IllegalStateException("No Peer Data bundle configured"))
+    var cachedPeerDataSnapshot: PeerDataSnapshot? = null
+    var snapshotResult: Result<PeerDataSnapshot> =
+        Result.failure(IllegalStateException("No Peer Data snapshot configured"))
+    val saveRequests = mutableListOf<Pair<Boolean, Long?>>()
+
+    override suspend fun resolveEntitlement(userFlag: Boolean?): Result<PeerDataEntitlementState> {
+        return entitlementResult
+    }
+
+    override fun observeParticipationSettings(uid: String): Flow<PeerDataParticipationSettings> {
+        return settings.getOrPut(uid) { MutableStateFlow(PeerDataParticipationSettings()) }
+    }
+
+    override suspend fun saveParticipationSettings(
+        contributionEnabled: Boolean,
+        previewedAt: Long?
+    ): Result<PeerDataParticipationSettings> {
+        saveRequests += contributionEnabled to previewedAt
+        val updated = PeerDataParticipationSettings(
+            contributionEnabled = contributionEnabled,
+            contributionVersion = cachedPeerDataBundle?.version.orEmpty(),
+            previewedAt = previewedAt,
+            withdrawnAt = if (contributionEnabled) null else previewedAt,
+            updatedAt = previewedAt ?: 0L
+        )
+        settings.values.forEach { flow -> flow.value = updated }
+        return Result.success(updated)
+    }
+
+    override fun getCachedBundle(): PeerDataBundle? = cachedPeerDataBundle
+
+    override suspend fun refreshBundle(): Result<PeerDataBundle> = refreshResult
+
+    override fun getCachedSnapshot(): PeerDataSnapshot? = cachedPeerDataSnapshot
+
+    override suspend fun getPeerSnapshot(): Result<PeerDataSnapshot> = snapshotResult
+
+    fun setSettings(uid: String, value: PeerDataParticipationSettings) {
+        settings.getOrPut(uid) { MutableStateFlow(PeerDataParticipationSettings()) }.value = value
     }
 }
 

@@ -2,6 +2,8 @@ package com.sidekick.opt_pal.feature.dashboard
 
 import com.google.firebase.auth.FirebaseUser
 import com.sidekick.opt_pal.data.model.Employment
+import com.sidekick.opt_pal.data.model.PeerBenchmarkCard
+import com.sidekick.opt_pal.data.model.PeerDataSnapshot
 import com.sidekick.opt_pal.data.model.PolicyAlertAvailability
 import com.sidekick.opt_pal.data.model.PolicyAlertCard
 import com.sidekick.opt_pal.data.model.PolicyAlertSource
@@ -15,6 +17,7 @@ import com.sidekick.opt_pal.testing.fakes.FakeCaseStatusRepository
 import com.sidekick.opt_pal.testing.fakes.FakeComplianceHealthRepository
 import com.sidekick.opt_pal.testing.fakes.FakeDashboardRepository
 import com.sidekick.opt_pal.testing.fakes.FakeDocumentRepository
+import com.sidekick.opt_pal.testing.fakes.FakePeerDataRepository
 import com.sidekick.opt_pal.testing.fakes.FakePolicyAlertRepository
 import com.sidekick.opt_pal.testing.fakes.FakeReportingRepository
 import com.sidekick.opt_pal.testing.fakes.FakeScenarioSimulatorRepository
@@ -383,6 +386,62 @@ class DashboardViewModelTest {
         assertEquals("Cap-gap fallback", state.latestScenarioDraftName)
         assertEquals("High risk", state.latestScenarioOutcomeLabel)
         assertEquals("Travel during pending COS can break cap-gap continuity.", state.latestScenarioHeadline)
+    }
+
+    @Test
+    fun peerDataSummaryAppearsWhenSnapshotExists() = runTest {
+        val authRepository = FakeAuthRepository()
+        val dashboardRepository = FakeDashboardRepository()
+        val reportingRepository = FakeReportingRepository()
+        val caseStatusRepository = FakeCaseStatusRepository()
+        val policyAlertRepository = FakePolicyAlertRepository()
+        val documentRepository = FakeDocumentRepository()
+        val complianceHealthRepository = FakeComplianceHealthRepository()
+        val peerDataRepository = FakePeerDataRepository()
+        peerDataRepository.cachedPeerDataSnapshot = PeerDataSnapshot(
+            snapshotId = "cached",
+            benchmarkCards = listOf(
+                PeerBenchmarkCard(
+                    id = "employment_timing",
+                    title = "Employment timing",
+                    summary = "About 68% were in qualifying work by day 30.",
+                    source = "app_cohort",
+                    cohortBasis = "Initial OPT • Computer and information sciences • 2026-H1",
+                    sampleSizeBand = "50-99"
+                )
+            )
+        )
+        peerDataRepository.snapshotResult = Result.success(peerDataRepository.cachedPeerDataSnapshot!!)
+        val viewModel = DashboardViewModel(
+            authRepository,
+            dashboardRepository,
+            reportingRepository,
+            caseStatusRepository,
+            policyAlertRepository,
+            documentRepository,
+            complianceHealthRepository,
+            peerDataRepository = peerDataRepository
+        ) { date(2026, 3, 10) }
+
+        authRepository.emitUser(mockUser("user-8"))
+        authRepository.emitProfile(
+            "user-8",
+            UserProfile(
+                uid = "user-8",
+                email = "peer@example.com",
+                optType = "initial",
+                optStartDate = date(2026, 1, 1),
+                peerDataEnabled = true
+            )
+        )
+
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("Employment timing", state.peerDataTitle)
+        assertEquals("About 68% were in qualifying work by day 30.", state.peerDataSummary)
+        assertEquals("App cohort", state.peerDataSourceLabel)
+        assertEquals("50-99", state.peerDataSampleSizeBand)
     }
 
     private fun mockUser(uid: String): FirebaseUser {

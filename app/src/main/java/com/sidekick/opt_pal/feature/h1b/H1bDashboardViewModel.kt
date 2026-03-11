@@ -144,10 +144,14 @@ class H1bDashboardViewModel(
 
     fun updateWorkflowStage(stage: H1bWorkflowStage) {
         persistTimeline {
+            val now = timeProvider()
             copy(
                 workflowStage = stage.wireValue,
                 selectedRegistration = if (stage.ordinal >= H1bWorkflowStage.SELECTED.ordinal) true else selectedRegistration,
-                filedPetition = if (stage.ordinal >= H1bWorkflowStage.PETITION_FILED.ordinal) true else filedPetition
+                filedPetition = if (stage.ordinal >= H1bWorkflowStage.PETITION_FILED.ordinal) true else filedPetition,
+                selectedAt = if (stage.ordinal >= H1bWorkflowStage.SELECTED.ordinal) selectedAt ?: now else selectedAt,
+                petitionFiledAt = if (stage.ordinal >= H1bWorkflowStage.PETITION_FILED.ordinal) petitionFiledAt ?: now else petitionFiledAt,
+                receiptReceivedAt = if (stage.ordinal >= H1bWorkflowStage.RECEIPT_RECEIVED.ordinal) receiptReceivedAt ?: now else receiptReceivedAt
             )
         }
     }
@@ -161,11 +165,21 @@ class H1bDashboardViewModel(
     }
 
     fun updateSelectedRegistration(value: Boolean?) {
-        persistTimeline { copy(selectedRegistration = value) }
+        persistTimeline {
+            copy(
+                selectedRegistration = value,
+                selectedAt = if (value == true) selectedAt ?: timeProvider() else if (value == false) null else selectedAt
+            )
+        }
     }
 
     fun updateFiledPetition(value: Boolean?) {
-        persistTimeline { copy(filedPetition = value) }
+        persistTimeline {
+            copy(
+                filedPetition = value,
+                petitionFiledAt = if (value == true) petitionFiledAt ?: timeProvider() else if (value == false) null else petitionFiledAt
+            )
+        }
     }
 
     fun updateHasEmployerLetter(value: Boolean?) {
@@ -297,7 +311,8 @@ class H1bDashboardViewModel(
                     val timelineResult = h1bDashboardRepository.saveTimelineState(
                         uid = uid,
                         timelineState = _uiState.value.timelineState.copy(
-                            receiptNumber = receiptNumber
+                            receiptNumber = receiptNumber,
+                            receiptReceivedAt = _uiState.value.timelineState.receiptReceivedAt ?: timeProvider()
                         )
                     )
                     val persistenceError = caseTrackingResult.exceptionOrNull() ?: timelineResult.exceptionOrNull()

@@ -7,6 +7,7 @@ data class UserProfile(
     val i983AssistantEnabled: Boolean? = null,
     val visaPathwayPlannerEnabled: Boolean? = null,
     val scenarioSimulatorEnabled: Boolean? = null,
+    val peerDataEnabled: Boolean? = null,
     val optType: String? = null,
     val optStartDate: Long? = null,
     val unemploymentTrackingStartDate: Long? = null,

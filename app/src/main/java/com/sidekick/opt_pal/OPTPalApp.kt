@@ -47,6 +47,7 @@ import com.sidekick.opt_pal.feature.h1b.H1bDashboardRoute
 import com.sidekick.opt_pal.feature.i983.I983AssistantRoute
 import com.sidekick.opt_pal.feature.legal.LegalRoute
 import com.sidekick.opt_pal.feature.pathway.VisaPathwayPlannerRoute
+import com.sidekick.opt_pal.feature.peer.PeerDataRoute
 import com.sidekick.opt_pal.feature.policy.PolicyAlertFeedRoute
 import com.sidekick.opt_pal.feature.reporting.ManageReportingRoute
 import com.sidekick.opt_pal.feature.reporting.ReportingRoute
@@ -176,6 +177,7 @@ fun OPTPalApp(
                         onOpenTravelAdvisor = { navController.navigate(AppScreen.TravelAdvisor.route) },
                         onOpenVisaPathwayPlanner = { navController.navigate(AppScreen.VisaPathwayPlanner.createRoute()) },
                         onOpenH1bDashboard = { navController.navigate(AppScreen.H1bDashboard.route) },
+                        onOpenPeerData = { navController.navigate(AppScreen.PeerData.route) },
                         onOpenScenarioSimulator = { navController.navigate(AppScreen.ScenarioSimulator.createRoute()) },
                         onOpenI983Assistant = { navController.navigate(AppScreen.I983Assistant.createRoute()) },
                         onOpenPolicyAlerts = { navController.navigate(AppScreen.PolicyAlerts.createRoute()) },
@@ -195,6 +197,7 @@ fun OPTPalApp(
                         onNavigateBack = { navController.popBackStack() },
                         onOpenCaseStatus = { navController.navigate(AppScreen.CaseStatus.createRoute()) },
                         onOpenVisaPathwayPlanner = { navController.navigate(AppScreen.VisaPathwayPlanner.createRoute()) },
+                        onOpenPeerData = { navController.navigate(AppScreen.PeerData.route) },
                         onOpenScenarioSimulator = {
                             navController.navigate(
                                 AppScreen.ScenarioSimulator.createRoute(
@@ -202,6 +205,13 @@ fun OPTPalApp(
                                 )
                             )
                         }
+                    )
+                }
+                composable(
+                    AppScreen.PeerData.route
+                ) {
+                    PeerDataRoute(
+                        onNavigateBack = { navController.popBackStack() }
                     )
                 }
                 composable(
@@ -282,6 +292,7 @@ fun OPTPalApp(
                         initialPathwayId = backStackEntry.arguments?.getString(AppScreen.VisaPathwayPlanner.PATHWAY_ID_ARG),
                         onNavigateBack = { navController.popBackStack() },
                         onNavigateToRoute = { route -> navController.navigate(route) },
+                        onOpenPeerData = { navController.navigate(AppScreen.PeerData.route) },
                         onOpenScenarioSimulator = {
                             navController.navigate(
                                 AppScreen.ScenarioSimulator.createRoute(

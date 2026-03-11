@@ -64,6 +64,7 @@ fun H1bDashboardRoute(
     onNavigateBack: () -> Unit,
     onOpenCaseStatus: () -> Unit,
     onOpenVisaPathwayPlanner: () -> Unit,
+    onOpenPeerData: () -> Unit,
     onOpenScenarioSimulator: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: H1bDashboardViewModel = viewModel(factory = H1bDashboardViewModel.Factory)
@@ -121,6 +122,7 @@ fun H1bDashboardRoute(
         onUpdateCapGapTravelPlanned = viewModel::updateCapGapTravelPlanned,
         onUpdateHasRfeOrNoid = viewModel::updateHasRfeOrNoid,
         onOpenVisaPathwayPlanner = onOpenVisaPathwayPlanner,
+        onOpenPeerData = onOpenPeerData,
         onOpenScenarioSimulator = onOpenScenarioSimulator,
         onOpenCitation = { citation ->
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(citation.url)))
@@ -164,6 +166,7 @@ fun H1bDashboardScreen(
     onUpdateCapGapTravelPlanned: (Boolean?) -> Unit,
     onUpdateHasRfeOrNoid: (Boolean?) -> Unit,
     onOpenVisaPathwayPlanner: () -> Unit,
+    onOpenPeerData: () -> Unit,
     onOpenScenarioSimulator: () -> Unit,
     onOpenCitation: (PolicyCitation) -> Unit,
     modifier: Modifier = Modifier
@@ -206,7 +209,7 @@ fun H1bDashboardScreen(
                 contentPadding = PaddingValues(24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                item { SummaryCard(state, onOpenVisaPathwayPlanner, onOpenScenarioSimulator) }
+                item { SummaryCard(state, onOpenVisaPathwayPlanner, onOpenPeerData, onOpenScenarioSimulator) }
                 item {
                     EmployerProfileCard(
                         state = state,
@@ -262,6 +265,7 @@ fun H1bDashboardScreen(
 private fun SummaryCard(
     state: H1bDashboardUiState,
     onOpenVisaPathwayPlanner: () -> Unit,
+    onOpenPeerData: () -> Unit,
     onOpenScenarioSimulator: () -> Unit
 ) {
     SectionCard("Readiness Summary") {
@@ -281,6 +285,7 @@ private fun SummaryCard(
             )
         }
         TextButton(onClick = onOpenVisaPathwayPlanner) { Text("Open Visa Planner") }
+        TextButton(onClick = onOpenPeerData) { Text("Open Peer Data") }
         TextButton(onClick = onOpenScenarioSimulator) { Text("Simulate Cap-Gap") }
     }
 }

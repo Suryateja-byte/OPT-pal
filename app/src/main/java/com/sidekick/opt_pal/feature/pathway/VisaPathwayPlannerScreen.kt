@@ -72,6 +72,7 @@ fun VisaPathwayPlannerRoute(
     initialPathwayId: String?,
     onNavigateBack: () -> Unit,
     onNavigateToRoute: (String) -> Unit,
+    onOpenPeerData: () -> Unit,
     onOpenScenarioSimulator: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: VisaPathwayPlannerViewModel = viewModel(
@@ -149,6 +150,7 @@ fun VisaPathwayPlannerRoute(
             AnalyticsLogger.logVisaPathwayPlannerSourceOpened(citation.id)
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(citation.url)))
         },
+        onOpenPeerData = onOpenPeerData,
         onOpenScenarioSimulator = onOpenScenarioSimulator,
         modifier = modifier
     )
@@ -179,6 +181,7 @@ fun VisaPathwayPlannerScreen(
     onMarkPreferredPathway: (VisaPathwayId) -> Unit,
     onRunAction: (VisaPathwayAction) -> Unit,
     onOpenCitation: (VisaPathwayCitation) -> Unit,
+    onOpenPeerData: () -> Unit,
     onOpenScenarioSimulator: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -257,7 +260,11 @@ fun VisaPathwayPlannerScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     item {
-                        CurrentPositionCard(state = state, onOpenScenarioSimulator = onOpenScenarioSimulator)
+                        CurrentPositionCard(
+                            state = state,
+                            onOpenPeerData = onOpenPeerData,
+                            onOpenScenarioSimulator = onOpenScenarioSimulator
+                        )
                     }
                     item {
                         QuestionnaireCard(
@@ -337,6 +344,7 @@ fun VisaPathwayPlannerScreen(
 @Composable
 private fun CurrentPositionCard(
     state: VisaPathwayPlannerUiState,
+    onOpenPeerData: () -> Unit,
     onOpenScenarioSimulator: () -> Unit
 ) {
     Surface(
@@ -370,6 +378,9 @@ private fun CurrentPositionCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            TextButton(onClick = onOpenPeerData) {
+                Text("Open Peer Data")
+            }
             TextButton(onClick = onOpenScenarioSimulator) {
                 Text("Run Scenario Simulator")
             }

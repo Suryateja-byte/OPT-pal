@@ -6,6 +6,7 @@ sealed class AppScreen(val route: String) {
     data object Setup : AppScreen("setup")
     data object Dashboard : AppScreen("dashboard")
     data object H1bDashboard : AppScreen("h1bDashboard")
+    data object PeerData : AppScreen("peerData")
     data object ScenarioSimulator : AppScreen("scenarioSimulator?templateId={templateId}&draftId={draftId}") {
         const val TEMPLATE_ID_ARG = "templateId"
         const val DRAFT_ID_ARG = "draftId"

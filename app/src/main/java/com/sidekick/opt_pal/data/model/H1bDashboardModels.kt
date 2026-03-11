@@ -151,6 +151,9 @@ data class H1bTimelineState(
     val filedPetition: Boolean? = null,
     val requestedChangeOfStatus: Boolean? = null,
     val requestedConsularProcessing: Boolean? = null,
+    val selectedAt: Long? = null,
+    val petitionFiledAt: Long? = null,
+    val receiptReceivedAt: Long? = null,
     val receiptNumber: String = "",
     val updatedAt: Long = 0L
 ) {

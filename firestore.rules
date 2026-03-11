@@ -20,6 +20,7 @@ service cloud.firestore {
           'i983AssistantEnabled',
           'visaPathwayPlannerEnabled',
           'scenarioSimulatorEnabled',
+          'peerDataEnabled',
           'optType',
           'optStartDate',
           'unemploymentTrackingStartDate',
@@ -223,6 +224,9 @@ service cloud.firestore {
           'filedPetition',
           'requestedChangeOfStatus',
           'requestedConsularProcessing',
+          'selectedAt',
+          'petitionFiledAt',
+          'receiptReceivedAt',
           'receiptNumber',
           'updatedAt'
         ])) ||
@@ -268,6 +272,9 @@ service cloud.firestore {
           'filedPetition',
           'requestedChangeOfStatus',
           'requestedConsularProcessing',
+          'selectedAt',
+          'petitionFiledAt',
+          'receiptReceivedAt',
           'receiptNumber',
           'updatedAt'
         ])) ||
@@ -288,6 +295,29 @@ service cloud.firestore {
           'updatedAt'
         ]))
       );
+      allow delete: if false;
+    }
+
+    match /users/{userId}/peerData/{docId} {
+      allow read: if isOwner(userId) && docId == 'settings';
+      allow create: if isOwner(userId) &&
+        docId == 'settings' &&
+        request.resource.data.keys().hasOnly([
+          'contributionEnabled',
+          'contributionVersion',
+          'previewedAt',
+          'withdrawnAt',
+          'updatedAt'
+        ]);
+      allow update: if isOwner(userId) &&
+        docId == 'settings' &&
+        changedOnly([
+          'contributionEnabled',
+          'contributionVersion',
+          'previewedAt',
+          'withdrawnAt',
+          'updatedAt'
+        ]);
       allow delete: if false;
     }
 
@@ -373,6 +403,18 @@ service cloud.firestore {
     match /policyAlerts/{alertId} {
       allow read: if request.auth != null;
       allow create, update, delete: if false;
+    }
+
+    match /peerDataFacts/{factId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /peerDataSnapshots/{snapshotId} {
+      allow read, create, update, delete: if false;
+
+      match /{document=**} {
+        allow read, create, update, delete: if false;
+      }
     }
 
     match /policyAlertCandidates/{candidateId} {

@@ -38,6 +38,7 @@ object UiTestTags {
     const val DASHBOARD_POLICY_ALERT_SUMMARY = "dashboard_policy_alert_summary"
     const val DASHBOARD_COMPLIANCE_CARD = "dashboard_compliance_card"
     const val DASHBOARD_H1B_CARD = "dashboard_h1b_card"
+    const val DASHBOARD_PEER_DATA_CARD = "dashboard_peer_data_card"
     const val DASHBOARD_SCENARIO_CARD = "dashboard_scenario_card"
 
     const val CASE_STATUS_RECEIPT_FIELD = "case_status_receipt_field"
@@ -121,4 +122,5 @@ object UiTestTags {
     const val DASHBOARD_VISA_PATHWAY_SUMMARY = "dashboard_visa_pathway_summary"
     const val H1B_DASHBOARD_SCREEN = "h1b_dashboard_screen"
     const val SCENARIO_SIMULATOR_SCREEN = "scenario_simulator_screen"
+    const val PEER_DATA_SCREEN = "peer_data_screen"
 }

@@ -106,6 +106,7 @@ fun DashboardRoute(
     onOpenTravelAdvisor: () -> Unit,
     onOpenVisaPathwayPlanner: () -> Unit,
     onOpenH1bDashboard: () -> Unit,
+    onOpenPeerData: () -> Unit,
     onOpenScenarioSimulator: () -> Unit,
     onOpenI983Assistant: () -> Unit,
     onOpenPolicyAlerts: () -> Unit,
@@ -170,6 +171,7 @@ fun DashboardRoute(
         onOpenTravelAdvisor = onOpenTravelAdvisor,
         onOpenVisaPathwayPlanner = onOpenVisaPathwayPlanner,
         onOpenH1bDashboard = onOpenH1bDashboard,
+        onOpenPeerData = onOpenPeerData,
         onOpenScenarioSimulator = onOpenScenarioSimulator,
         onOpenI983Assistant = onOpenI983Assistant,
         onOpenPolicyAlerts = onOpenPolicyAlerts,
@@ -217,6 +219,7 @@ internal fun DashboardScreen(
     onOpenTravelAdvisor: () -> Unit,
     onOpenVisaPathwayPlanner: () -> Unit,
     onOpenH1bDashboard: () -> Unit = {},
+    onOpenPeerData: () -> Unit = {},
     onOpenScenarioSimulator: () -> Unit,
     onOpenI983Assistant: () -> Unit,
     onOpenPolicyAlerts: () -> Unit,
@@ -295,6 +298,16 @@ internal fun DashboardScreen(
                                 Spacer(modifier = Modifier.height(24.dp))
                             }
                             H1bDashboardEntryCard(onOpenH1bDashboard = onOpenH1bDashboard)
+                            Spacer(modifier = Modifier.height(24.dp))
+                            PeerDataEntryCard(
+                                onOpenPeerData = onOpenPeerData,
+                                title = state.peerDataTitle,
+                                summary = state.peerDataSummary,
+                                sourceLabel = state.peerDataSourceLabel,
+                                sampleSizeBand = state.peerDataSampleSizeBand,
+                                cohortBasis = state.peerDataCohortBasis,
+                                modeLabel = state.peerDataModeLabel
+                            )
                             Spacer(modifier = Modifier.height(24.dp))
                             ScenarioSimulatorEntryCard(
                                 onOpenScenarioSimulator = onOpenScenarioSimulator,
@@ -455,6 +468,61 @@ private fun H1bDashboardEntryCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+private fun PeerDataEntryCard(
+    onOpenPeerData: () -> Unit,
+    title: String? = null,
+    summary: String? = null,
+    sourceLabel: String? = null,
+    sampleSizeBand: String? = null,
+    cohortBasis: String? = null,
+    modeLabel: String? = null
+) {
+    val body = summary ?: "See privacy-safe cohort benchmarks and official context without exposing employers, schools, or exact dates."
+    val footer = listOfNotNull(
+        modeLabel?.takeIf { it.isNotBlank() },
+        sourceLabel?.takeIf { it.isNotBlank() }?.let { "Source: $it" },
+        sampleSizeBand?.takeIf { it.isNotBlank() }?.let { "Sample: $it" },
+        cohortBasis?.takeIf { it.isNotBlank() }
+    ).joinToString(" • ")
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(UiTestTags.DASHBOARD_PEER_DATA_CARD),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        onClick = onOpenPeerData
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "PEER DATA",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = title ?: "Private peer benchmarks",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (footer.isNotBlank()) {
+                Text(
+                    text = footer,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }

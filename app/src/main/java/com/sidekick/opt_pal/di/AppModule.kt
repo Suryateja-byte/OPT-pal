@@ -34,6 +34,8 @@ import com.sidekick.opt_pal.data.repository.I983AssistantRepository
 import com.sidekick.opt_pal.data.repository.I983AssistantRepositoryImpl
 import com.sidekick.opt_pal.data.repository.NotificationDeviceRepository
 import com.sidekick.opt_pal.data.repository.NotificationDeviceRepositoryImpl
+import com.sidekick.opt_pal.data.repository.PeerDataRepository
+import com.sidekick.opt_pal.data.repository.PeerDataRepositoryImpl
 import com.sidekick.opt_pal.data.repository.PolicyAlertRepository
 import com.sidekick.opt_pal.data.repository.PolicyAlertRepositoryImpl
 import com.sidekick.opt_pal.data.repository.ReportingRepository
@@ -92,6 +94,7 @@ object AppModule {
     val visaPathwayPlannerRepository: VisaPathwayPlannerRepository by lazy { VisaPathwayPlannerRepositoryImpl(appContext) }
     val h1bDashboardRepository: H1bDashboardRepository by lazy { H1bDashboardRepositoryImpl(appContext) }
     val scenarioSimulatorRepository: ScenarioSimulatorRepository by lazy { ScenarioSimulatorRepositoryImpl(appContext) }
+    val peerDataRepository: PeerDataRepository by lazy { PeerDataRepositoryImpl(appContext) }
     val policyAlertRepository: PolicyAlertRepository by lazy {
         PolicyAlertRepositoryImpl(
             notificationDeviceRepository = notificationDeviceRepository
